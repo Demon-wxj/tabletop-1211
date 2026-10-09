@@ -11,3 +11,7 @@ Minecraft **1.21.1 / Fabric / Java 21**。源码版本 `0.5.8+mc1.21.1`，Mod ID
 [构建](BUILDING.md) · [安装](INSTALLATION.md) · [来源与许可](THIRD_PARTY_NOTICES.md)
 
 代码采用 GPL-3.0-only；第三方部分按各自许可保留署名。整理时未重新编译或进游戏测试。
+
+## 贡献者
+
+Demon-wxj · GPT（OpenAI）。分工见 [CONTRIBUTORS.md](CONTRIBUTORS.md)。
