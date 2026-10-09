@@ -1,0 +1,19 @@
+{
+  "name": "table-nine",
+  "dataVersion": 3955,
+  "compression": "gzip",
+  "updateBlockStates": true,
+  "blockStateUpdates": {
+    "updatedBlocks": 0
+  },
+  "nbtPath": "LOCAL_WORKSPACE",
+  "summaryPath": "LOCAL_WORKSPACE",
+  "size": [
+    11,
+    3,
+    10
+  ],
+  "blockCount": 56,
+  "paletteCount": 8,
+  "recipePath": "LOCAL_WORKSPACE"
+}

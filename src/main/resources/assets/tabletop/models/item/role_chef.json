@@ -1,0 +1,7 @@
+{
+  "parent": "tabletop:item/_token",
+  "textures": {
+    "front": "tabletop:item/role_chef",
+    "back": "tabletop:item/role_back"
+  }
+}

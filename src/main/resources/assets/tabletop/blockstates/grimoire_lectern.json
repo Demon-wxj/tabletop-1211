@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "tabletop:block/grimoire_lectern",
+      "y": 0
+    },
+    "facing=east": {
+      "model": "tabletop:block/grimoire_lectern",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "tabletop:block/grimoire_lectern",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "tabletop:block/grimoire_lectern",
+      "y": 270
+    }
+  }
+}

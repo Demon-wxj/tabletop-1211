@@ -1,0 +1,6 @@
+{
+  "parent": "tabletop:item/_sheet",
+  "textures": {
+    "front": "tabletop:item/script_card"
+  }
+}

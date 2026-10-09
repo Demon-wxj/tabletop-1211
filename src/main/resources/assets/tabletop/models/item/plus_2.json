@@ -1,0 +1,6 @@
+{
+  "parent": "tabletop:item/_card",
+  "textures": {
+    "front": "tabletop:item/plus_2"
+  }
+}

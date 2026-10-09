@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "tabletop",
+  "version": "${version}",
+  "name": "Tabletop · 桌间",
+  "description": "七连翻、暗流涌动与桌间手机。",
+  "authors": [
+    "Workspace project"
+  ],
+  "license": "GPL-3.0-only",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "local.tabletop.TabletopMod"
+    ],
+    "client": [
+      "local.tabletop.client.TabletopClient"
+    ]
+  },
+  "mixins": [
+    "tabletop.mixins.json",
+    "tabletop.client.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.10",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "fabric-api": ">=0.116.6"
+  }
+}

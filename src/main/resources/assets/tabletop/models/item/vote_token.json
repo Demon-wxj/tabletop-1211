@@ -1,0 +1,7 @@
+{
+  "parent": "tabletop:item/_token",
+  "textures": {
+    "front": "tabletop:item/vote_token",
+    "back": "tabletop:item/vote_token"
+  }
+}

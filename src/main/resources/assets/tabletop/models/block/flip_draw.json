@@ -1,0 +1,1 @@
+{"parent":"minecraft:block/block","textures":{"all":"minecraft:block/lime_concrete","particle":"minecraft:block/lime_concrete"},"elements":[{"from":[2,0,2],"to":[14,2,14],"faces":{"up":{"texture":"#all"},"down":{"texture":"#all"},"north":{"texture":"#all"},"south":{"texture":"#all"},"east":{"texture":"#all"},"west":{"texture":"#all"}}}]}

@@ -1,0 +1,7 @@
+{
+  "parent": "tabletop:item/_token",
+  "textures": {
+    "front": "tabletop:item/identity_card",
+    "back": "tabletop:item/identity_card"
+  }
+}

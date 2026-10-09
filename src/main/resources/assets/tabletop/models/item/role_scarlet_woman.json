@@ -1,0 +1,7 @@
+{
+  "parent": "tabletop:item/_token",
+  "textures": {
+    "front": "tabletop:item/role_scarlet_woman",
+    "back": "tabletop:item/role_back"
+  }
+}

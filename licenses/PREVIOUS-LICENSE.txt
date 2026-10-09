@@ -1,0 +1,13 @@
+LicenseRef-Personal-Prototype
+
+本工程为当前用户工作区生成的个人 Minecraft 桌游原型。
+本地交付可用于用户自己的开发、修改和测试。
+
+Blood on the Clocktower / Trouble Brewing 和 Flip 7 的游戏名称、
+角色名称、规则及相关品牌归原权利人所有。本工程并非官方产品或官方授权项目。
+所有打包模型、像素图形和排版为本工程重新制作；用户实物照片与官方照片仅为参考，
+未作为本工程游戏纹理分发。
+
+本说明不授予第三方桌游内容的商业使用或公开分发权利。
+Fabric、Fabric API、Minecraft 及构建依赖分别遵循其自身许可。
+本原型按现状提供，测试范围和未验证内容见 README.md。

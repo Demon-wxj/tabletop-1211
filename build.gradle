@@ -1,0 +1,18 @@
+// Publication copy: portable production build. Local test worlds and repair fixtures are excluded.
+plugins { id 'fabric-loom' version '1.9-SNAPSHOT'; id 'java' }
+version = '0.5.8+mc1.21.1'
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+repositories { mavenCentral(); maven { url 'https://maven.fabricmc.net/' } }
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+}
+java { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21; withSourcesJar() }
+tasks.withType(JavaCompile).configureEach { options.release = 21; options.encoding = 'UTF-8' }
+processResources { inputs.property 'version', project.version; filesMatching('fabric.mod.json') { expand version: project.version } }
+jar { from('LICENSE'); from('THIRD_PARTY_NOTICES.md'); from('licenses') { into 'META-INF/licenses' } }

@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "local.tabletop.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "HandCardSlotsMixin",
+    "ClockDamageMixin",
+    "ClockDeathMixin",
+    "ClockPlayerDropsMixin",
+    "ClockServerDropsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
