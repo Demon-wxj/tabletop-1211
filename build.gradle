@@ -1,18 +1,84 @@
-// Publication copy: portable production build. Local test worlds and repair fixtures are excluded.
 plugins { id 'fabric-loom' version '1.9-SNAPSHOT'; id 'java' }
-version = '0.5.8+mc1.21.1'
-group = project.maven_group
-base { archivesName = project.archives_base_name }
-repositories { mavenCentral(); maven { url 'https://maven.fabricmc.net/' } }
-
+version = '0.5.10+mc1.21.1'
+group = 'local.tabletop'
+base { archivesName = 'tabletop' }
+repositories {
+    mavenCentral()
+    maven { url 'https://maven.fabricmc.net/' }
+}
+loom { splitEnvironmentSourceSets(); mods { tabletop { sourceSet sourceSets.main; sourceSet sourceSets.client } }; runs { server { runDir = 'server-test'; programArg 'nogui' } } }
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-
 }
 java { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21; withSourcesJar() }
 tasks.withType(JavaCompile).configureEach { options.release = 21; options.encoding = 'UTF-8' }
 processResources { inputs.property 'version', project.version; filesMatching('fabric.mod.json') { expand version: project.version } }
-jar { from('LICENSE'); from('THIRD_PARTY_NOTICES.md'); from('licenses') { into 'META-INF/licenses' } }
+jar { from('LICENSE') { rename { 'LICENSE_tabletop' } } }
+sourceSets { regression { java.srcDir 'src/regression/java'; compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath; runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath } }
+tasks.register('regressionTest', JavaExec) { dependsOn regressionClasses; classpath = sourceSets.regression.runtimeClasspath; mainClass = 'local.tabletop.RegressionSuite' }
+
+if (project.hasProperty('flipMcCheck')) {
+    sourceSets { flipMcCheck {
+        java.setSrcDirs(['src/flipMcCheck/java'])
+        resources.setSrcDirs(['src/flipMcCheck/resources'])
+        compileClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.runtimeClasspath
+    } }
+    compileFlipMcCheckJava.dependsOn classes, clientClasses
+    tasks.register('flipMcCheckJar', Jar) {
+        dependsOn flipMcCheckClasses
+        from sourceSets.flipMcCheck.output
+        archiveClassifier = 'flip-check-dev'
+    }
+    tasks.register('remapFlipMcCheckJar', net.fabricmc.loom.task.RemapJarTask) {
+        dependsOn flipMcCheckJar
+        inputFile = tasks.flipMcCheckJar.archiveFile
+        classpath.from(sourceSets.main.output, sourceSets.client.output)
+        archiveClassifier = 'flip-check'
+    }
+}
+
+// Disposable Minecraft checks; excluded from the production jar.
+if (project.hasProperty('clockMcCheck')) {
+    sourceSets { clockMcCheck {
+        java.setSrcDirs(['src/clockMcCheck/java'])
+        resources.setSrcDirs(['src/clockMcCheck/resources'])
+        compileClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.runtimeClasspath
+    } }
+    compileClockMcCheckJava.dependsOn classes, clientClasses
+    tasks.register('clockMcCheckJar', Jar) {
+        dependsOn clockMcCheckClasses
+        from sourceSets.clockMcCheck.output
+        archiveClassifier = 'clock-check-dev'
+    }
+    tasks.register('remapClockMcCheckJar', net.fabricmc.loom.task.RemapJarTask) {
+        dependsOn clockMcCheckJar
+        inputFile = tasks.clockMcCheckJar.archiveFile
+        classpath.from(sourceSets.main.output, sourceSets.client.output)
+        archiveClassifier = 'clock-check'
+    }
+}
+
+// Optional isolated graphical probe. Its classes and metadata are not part of the shipped mod.
+if (project.hasProperty('visualCheck')) {
+    sourceSets { visualCheck { compileClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.compileClasspath; runtimeClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.runtimeClasspath } }
+    loom {
+        mods { tabletop_visual_check { sourceSet sourceSets.visualCheck } }
+        runs { visualCheck { client(); source sourceSets.visualCheck; runDir 'visual-check'; programArgs '--username', 'TT_VIS', '--quickPlayMultiplayer', '127.0.0.1:25578', '--width', '1280', '--height', '900'; if(project.hasProperty('visualNine')) vmArg '-Dtabletop.visualNine=true' } }
+    }
+    compileVisualCheckJava.dependsOn classes, clientClasses
+}
+
+// Full-game screenshot director: separate test mod, excluded from all shipped jars.
+if (project.hasProperty('fullFlowCheck')) {
+    sourceSets { fullFlowCheck { compileClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.compileClasspath; runtimeClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.runtimeClasspath } }
+    loom {
+        mods { tabletop_full_flow_check { sourceSet sourceSets.fullFlowCheck } }
+        runs { fullFlowCheck { client(); source sourceSets.fullFlowCheck; runDir 'visual-check'; programArgs '--username', 'TT_VIS', '--quickPlayMultiplayer', '127.0.0.1:25578', '--width', '1280', '--height', '900' } }
+    }
+    compileFullFlowCheckJava.dependsOn classes, clientClasses
+}

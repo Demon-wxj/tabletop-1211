@@ -6,8 +6,8 @@
   "blockStateUpdates": {
     "updatedBlocks": 0
   },
-  "nbtPath": "LOCAL_WORKSPACE",
-  "summaryPath": "LOCAL_WORKSPACE",
+  "nbtPath": "C:\\Users\\wxj\\Doubao\\chats\\2026-08-30\\new-chat\\tabletop-1211\\src\\main\\resources\\data\\tabletop\\structure\\table-nine.nbt",
+  "summaryPath": "C:\\Users\\wxj\\Doubao\\chats\\2026-08-30\\new-chat\\tabletop-1211\\src\\main\\resources\\data\\tabletop\\structure\\summary.json",
   "size": [
     11,
     3,
@@ -15,5 +15,5 @@
   ],
   "blockCount": 56,
   "paletteCount": 8,
-  "recipePath": "LOCAL_WORKSPACE"
+  "recipePath": "C:\\Users\\wxj\\Doubao\\chats\\2026-08-30\\new-chat\\tabletop-1211\\tools\\table-nine.mjs"
 }

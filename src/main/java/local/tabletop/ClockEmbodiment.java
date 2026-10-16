@@ -45,6 +45,7 @@ public final class ClockEmbodiment {
         final String arenaKey;
         final Map<UUID,NbtCompound> before=new LinkedHashMap<>();
         final Map<UUID,NbtCompound> costumes=new HashMap<>();
+        final List<Entity> effects=new ArrayList<>();
         final Set<UUID> seenNightDead=new HashSet<>(),seenExecuted=new HashSet<>(),seenLogicalDead=new HashSet<>();
         String phase="",taskKey="";
         String approvedKey="";
@@ -61,6 +62,7 @@ public final class ClockEmbodiment {
         int at;
         NbtCompound before;
         ServerPlayerEntity corpse;
+        UUID attacker;
         Death(Scene scene,UUID player,boolean execution,int at){this.scene=scene;this.player=player;this.execution=execution;this.at=at;}
     }
     private ClockEmbodiment(){}
@@ -199,15 +201,34 @@ public final class ClockEmbodiment {
     public static boolean silentDeath(ServerPlayerEntity p){return AUTHORIZED_DEATH.contains(p.getUuid())&&DEATHS.containsKey(p.getUuid());}
     public static void onSilentDeath(ServerPlayerEntity p){
         Death death=DEATHS.get(p.getUuid());if(death==null)return;death.corpse=p;death.at=p.getServer().getTicks()+1;
-        if(death.execution)p.getServerWorld().sendEntityStatus(p,(byte)3);else deathAnimation(p);p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.HealthUpdateS2CPacket(0,p.getHungerManager().getFoodLevel(),p.getHungerManager().getSaturationLevel()));
+        p.getServerWorld().sendEntityStatus(p,(byte)3);p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.DamageTiltS2CPacket(p.getId(),0));p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.HealthUpdateS2CPacket(0,p.getHungerManager().getFoodLevel(),p.getHungerManager().getSaturationLevel()));
     }
     private static void deathAnimation(ServerPlayerEntity player){
         player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket(player,(byte)3));
         player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.DamageTiltS2CPacket(player.getId(),0));
     }
     private static void executeDeath(Death death,ServerPlayerEntity player){
-        death.before=capture(player);AUTHORIZED_DEATH.add(player.getUuid());try{player.setInvulnerable(false);player.setHealth(0);player.onDeath(player.getDamageSources().genericKill());}
-        finally{AUTHORIZED_DEATH.remove(player.getUuid());}if(death.corpse==null){death.corpse=player;death.at=death.scene.server.getTicks()+1;}
+        if(!player.isAlive()||death.corpse!=null)return;
+        death.before=capture(player);
+        if(death.execution){
+            var lightning=net.minecraft.entity.EntityType.LIGHTNING_BOLT.create(player.getServerWorld());
+            if(lightning!=null){lightning.setCosmetic(true);lightning.addCommandTag("tabletop_clock_execution");lightning.refreshPositionAfterTeleport(player.getX(),player.getY(),player.getZ());player.getServerWorld().spawnEntity(lightning);death.scene.effects.add(lightning);}
+        }
+        AUTHORIZED_DEATH.add(player.getUuid());try{
+            player.setInvulnerable(false);player.timeUntilRegen=0;
+            var killer=death.attacker==null?null:death.scene.server.getPlayerManager().getPlayer(death.attacker);
+            var source=death.execution?player.getDamageSources().lightningBolt():killer!=null?player.getDamageSources().playerAttack(killer):player.getDamageSources().genericKill();
+            player.damage(source,10_000);
+            // The Storyteller already confirmed logical death. Original resistance/equipment
+            // cannot veto that verdict; the fallback still uses Minecraft's real damage path.
+            if(player.isAlive())player.damage(player.getDamageSources().genericKill(),Float.MAX_VALUE);
+            if(player.isAlive())throw new IllegalStateException("本次已确认死亡被其他模组取消，场景快照已保留。");
+        }finally{AUTHORIZED_DEATH.remove(player.getUuid());}
+        if(death.corpse==null){death.corpse=player;death.at=death.scene.server.getTicks()+1;}
+    }
+    private static void bladeDeath(Scene stage,ServerPlayerEntity attacker,ServerPlayerEntity target){
+        if(stage.session.clock.isAlive(target.getUuid())||!target.isAlive()||DEATHS.containsKey(target.getUuid()))return;
+        Death death=new Death(stage,target.getUuid(),false,stage.server.getTicks());death.attacker=attacker.getUuid();DEATHS.put(target.getUuid(),death);executeDeath(death,target);
     }
     private static void respawn(Death death){
         ServerPlayerEntity old=death.corpse;if(old==null)return;var server=death.scene.server;ServerPlayerEntity current=server.getPlayerManager().getPlayer(death.player);if(current==null)return;
@@ -215,7 +236,7 @@ public final class ClockEmbodiment {
         if(death.scene.session.clock!=null&&death.scene.session.clock.isNight())home(death.scene,player);else seat(death.scene,player);DEATHS.remove(death.player);Sessions.refresh(death.scene.session,server);
     }
     public static void tick(MinecraftServer server){
-        for(Scene stage:new ArrayList<>(SCENES.values()))if(stage.server==server){sync(stage.session,server);if(scene(stage.session)==null)continue;impSound(stage);
+        for(Scene stage:new ArrayList<>(SCENES.values()))if(stage.server==server){sync(stage.session,server);if(scene(stage.session)==null)continue;stage.effects.removeIf(Entity::isRemoved);impSound(stage);
             for(UUID id:stage.session.roster.keySet()){var player=server.getPlayerManager().getPlayer(id);if(player==null||!player.isAlive()||DEATHS.containsKey(id))continue;player.getHungerManager().setFoodLevel(20);player.getHungerManager().setSaturationLevel(5);
                 if(stage.session.clock!=null&&stage.session.clock.isNight()){
                     ClockGame.PhysicalTask task=stage.session.clock.physicalTask();boolean imp=task!=null&&task.role().equals("imp")&&task.actor().equals(id)&&stage.costumes.containsKey(id);
@@ -293,7 +314,7 @@ public final class ClockEmbodiment {
         Scene stage=scene(p);if(stage==null){return target instanceof ServerPlayerEntity other&&active(other)?ActionResult.FAIL:ActionResult.PASS;}
         if(target instanceof ServerPlayerEntity player&&hand==Hand.MAIN_HAND&&currentProp(stage,p,p.getMainHandStack(),"knife")){
             ClockGame.PhysicalTask task=stage.session.clock.physicalTask();var targetRoom=room(stage,player.getUuid());if(task!=null&&stage.session.offline.isEmpty()&&stage.session.roster.containsKey(player.getUuid())&&scene(player)==stage&&stage.approvedKey.equals(task.key())&&Objects.equals(stage.approvedTarget,player.getUuid())&&targetRoom!=null&&targetRoom.bounds.contains(p.getX(),p.getY(),p.getZ())&&targetRoom.bounds.contains(player.getX(),player.getY(),player.getZ())&&p.getServerWorld()==stage.world()&&player.getServerWorld()==stage.world()&&p.squaredDistanceTo(player)<=16&&p.canSee(player)){
-                boolean effective=stage.session.clock.impEntryPossible(p.getUuid(),player.getUuid());String result=stage.session.clock.resolve(stage.session.host,stage.approvedInfo);if(!ClockGame.acceptedResponse("resolve",result))throw new IllegalStateException(result);if(!effective)deathAnimation(p);Sessions.refresh(stage.session,stage.server);
+                boolean effective=stage.session.clock.impEntryPossible(p.getUuid(),player.getUuid());String result=stage.session.clock.resolve(stage.session.host,stage.approvedInfo);if(!ClockGame.acceptedResponse("resolve",result))throw new IllegalStateException(result);if(effective)bladeDeath(stage,p,player);Sessions.refresh(stage.session,stage.server);
             }
         }
         return ActionResult.FAIL;
@@ -320,6 +341,6 @@ public final class ClockEmbodiment {
     public static void disconnect(ServerPlayerEntity p){Scene stage=scene(p);if(stage!=null){closeDoors(stage);stage.approvedKey="";stage.approvedTarget=null;restoreCostume(stage,p.getUuid());if(stage.session.clock!=null&&stage.session.clock.isNight()&&p.isAlive())home(stage,p);}}
     public static void rejoin(ServerPlayerEntity p){Scene stage=scene(p);if(stage==null){recover(p);return;}if(!p.isAlive())return;p.changeGameMode(stage.session.host.equals(p.getUuid())?GameMode.byId(stage.before.get(p.getUuid()).getInt("mode")):GameMode.ADVENTURE);if(stage.session.clock!=null&&stage.session.clock.isNight()&&!stage.session.host.equals(p.getUuid()))home(stage,p);else seat(stage,p);sync(stage.session,stage.server);}
     private static void recover(ServerPlayerEntity p){Path path=recovery(p);if(!Files.exists(path)||!p.isAlive())return;try{NbtCompound n=NbtIo.readCompressed(path,NbtSizeTracker.ofUnlimitedBytes());restore(p,n,true);var board=p.getScoreboard();var current=board.getScoreHolderTeam(p.getGameProfile().getName());if(current!=null&&current.getName().matches("tt_[0-9a-f]{8}_(st|[1-9]|1[0-2])x*")){board.removeScoreHolderFromTeam(p.getGameProfile().getName(),current);if(current.getPlayerList().isEmpty())board.removeTeam(current);var previous=board.getTeam(n.getString("team"));if(previous!=null)board.addScoreHolderToTeam(p.getGameProfile().getName(),previous);}Files.delete(path);}catch(Exception e){LOGGER.error("Clock scene player recovery failed; snapshot retained",e);throw new IllegalStateException("钟楼场景档案恢复失败，备份已保留。",e);}}
-    public static void release(Sessions.Session s,MinecraftServer server){Scene stage=scene(s);if(stage==null)return;closeDoors(stage);SCENES.remove(s.id);for(UUID id:new HashSet<>(stage.costumes.keySet()))restoreCostume(stage,id);for(var entry:stage.before.entrySet()){var p=server.getPlayerManager().getPlayer(entry.getKey());if(p==null)continue;Death death=DEATHS.get(p.getUuid());if(death!=null){if(death.corpse==null&&s.clock!=null&&s.clock.isAlive(death.player))DEATHS.remove(death.player,death);else{if(death.corpse==null&&p.isAlive())executeDeath(death,p);respawn(death);p=server.getPlayerManager().getPlayer(entry.getKey());}}if(p!=null&&p.isAlive()){restore(p,entry.getValue(),true);try{Files.deleteIfExists(recovery(p));}catch(Exception e){LOGGER.error("Clock recovery record retained",e);}}}DEATHS.entrySet().removeIf(e->e.getValue().scene==stage);ClockRoomDoors.restore(server);}
+    public static void release(Sessions.Session s,MinecraftServer server){Scene stage=scene(s);if(stage==null)return;closeDoors(stage);for(Entity effect:stage.effects)effect.discard();stage.effects.clear();SCENES.remove(s.id);for(UUID id:new HashSet<>(stage.costumes.keySet()))restoreCostume(stage,id);for(var entry:stage.before.entrySet()){var p=server.getPlayerManager().getPlayer(entry.getKey());if(p==null)continue;Death death=DEATHS.get(p.getUuid());if(death!=null){if(death.corpse==null&&s.clock!=null&&s.clock.isAlive(death.player))DEATHS.remove(death.player,death);else{if(death.corpse==null&&p.isAlive())executeDeath(death,p);respawn(death);p=server.getPlayerManager().getPlayer(entry.getKey());}}if(p!=null&&p.isAlive()){restore(p,entry.getValue(),true);try{Files.deleteIfExists(recovery(p));}catch(Exception e){LOGGER.error("Clock recovery record retained",e);}}}DEATHS.entrySet().removeIf(e->e.getValue().scene==stage);ClockRoomDoors.restore(server);}
     public static void clear(){for(Scene stage:new ArrayList<>(SCENES.values()))release(stage.session,stage.server);SCENES.clear();DEATHS.clear();AUTHORIZED_DEATH.clear();RESTORING.clear();ClockArena.clear();}
 }

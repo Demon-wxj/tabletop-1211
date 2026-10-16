@@ -856,7 +856,7 @@ public final class PhoneScreen extends Screen {
             if(!compact())c.drawText(textRenderer,Text.literal(trim(time,innerRight-innerLeft-32)),innerLeft+29,contentTop+18,MUTED,false);
             JsonElement own=vote.get("myVote");
             String ownStatus=own==null||own.isJsonNull()?"未点默认不支持":own.getAsBoolean()?"你已支持 · 计票前可改":"你已选择不支持";
-            if(vote.has("mayVote")&&!bool(vote,"mayVote"))ownStatus="等待投票顺位";
+            if(vote.has("mayVote")&&!bool(vote,"mayVote"))ownStatus="等待玩家重连";
             c.drawText(textRenderer,Text.literal(trim(ownStatus,innerRight-innerLeft-8)),innerLeft+4,contentTop+(compact()?18:31),TEAL,false);
         }
         c.enableScissor(innerLeft,assistantTop,innerRight,assistantBottom);

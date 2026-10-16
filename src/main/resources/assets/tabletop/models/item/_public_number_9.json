@@ -1,0 +1,6 @@
+{
+  "parent": "tabletop:item/_public_card",
+  "textures": {
+    "front": "tabletop:item/number_9"
+  }
+}

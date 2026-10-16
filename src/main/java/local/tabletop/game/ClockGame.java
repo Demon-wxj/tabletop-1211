@@ -147,7 +147,7 @@ public final class ClockGame {
         if(operation==null||result==null)return false;
         return switch(operation) {
             case "phase"->result.startsWith("已进入白天；")||result.startsWith("白天无人被处决；已进入下一夜。");
-            case "nominate"->result.startsWith("投票按顺时针逐座进行")||result.startsWith("提名已记录；")||result.startsWith("处决完成，");
+            case "nominate"->result.startsWith("投票按同轮同时统计")||result.startsWith("提名已记录；")||result.startsWith("处决完成，");
             case "vote","unvote"->result.startsWith("已举手投票")||result.equals("已记录不投票。")||result.equals("已记录不支持（改票）。")||result.equals("本轮已经记录相同选择。");
             case "closevote"->result.startsWith("计票完成：");
             case "execute"->result.startsWith("处决完成，")||result.equals("无人达到唯一最高票，今天无人被处决，进入夜晚。");
@@ -155,7 +155,7 @@ public final class ClockGame {
             case "mark"->result.equals("魔典状态已更新，仅说书人可见隐藏标记。");
             case "finish"->result.equals("本局已经结算。");
             case "submit"->result.equals("回复已私下提交给说书人。");
-            case "resolve"->result.startsWith("步骤已确认，")||result.startsWith("处决完成，")||result.equals("相关判定已确认，开始普通逐座投票。")||result.equals("猎手相关判定已确认。");
+            case "resolve"->result.startsWith("步骤已确认，")||result.startsWith("处决完成，")||result.equals("相关判定已确认，开始普通投票，所有座位可同时回应。")||result.equals("猎手相关判定已确认。")||result.equals("房门已打开，等待夜刃命中。");
             default->false;
         };
     }
@@ -296,7 +296,7 @@ public final class ClockGame {
                 if(RoleCatalog.get(roles.get(nominator)).type().equals("townsfolk"))return execution(nominator);
             }
         }
-        openVote(nominee);return "投票按顺时针逐座进行，从被提名者下一座开始，最后轮到被提名者。";
+        openVote(nominee);return "投票按同轮同时统计，所有座位均可立即支持或不支持，由说书人确认计票。";
     }
     private void openVote(UUID nominee) {
         int start=players.indexOf(nominee);List<UUID> order=new ArrayList<>();
@@ -313,9 +313,6 @@ public final class ClockGame {
             if(activeVote.ballots.get(voter)==yes)return "本轮已经记录相同选择。";
             activeVote.ballots.put(voter,yes);log("vote_change",voter,activeVote.nominee,yes?"改为支持。":"取消支持，改为不支持。",false);return yes?"已举手投票（改票）。":"已记录不支持（改票）。";
         }
-        int step=activeVote.ballots.size();
-        if(step==activeVote.order.size())return "本轮所有座位已投票，等待说书人计票。";
-        if(!activeVote.order.get(step).equals(voter))return "当前应由 "+seat(activeVote.order.get(step))+" 投票。";
         if(yes&&dead.contains(voter)&&spentGhost.contains(voter))return "你的幽灵票已使用，只能选择不投票。";
         activeVote.ballots.put(voter,yes);log("vote",voter,activeVote.nominee,yes?"支持。":"不支持。",false);return yes?"已举手投票。":"已记录不投票。";
     }
@@ -501,7 +498,7 @@ public final class ClockGame {
         Map<String,Object> m=new LinkedHashMap<>();m.put("role",t.role);m.put("actor",t.actor.toString());m.put("targetCount",t.targetCount);m.put("help",t.help);
         m.put("status",t.skipped?"skipped":t.resolved?"resolved":t.submitted||t.targetCount==0?"awaiting_confirmation":"awaiting_player");
         m.put("current",currentTask()==t);
-        if(storytellerView){m.put("targets",t.targets.stream().map(UUID::toString).toList());m.put("impaired",impaired(t.actor));}
+        if(storytellerView){m.put("targets",t.targets.stream().map(UUID::toString).toList());m.put("impaired",impaired(t.actor));m.put("trueRole",roles.getOrDefault(t.actor,""));m.put("shownRole",shown.getOrDefault(t.actor,""));m.put("fakeRole",!t.role.equals(roles.get(t.actor))&&t.role.equals(shown.get(t.actor)));}
         return m;
     }
     /** Internal Storyteller API. Never send this list in a public payload. */
@@ -523,7 +520,7 @@ public final class ClockGame {
         if(finished)return "本局已结算，重置后可准备下一局。";
         if(dayDecision!=null)return dayDecision.kind.equals("virgin")?"贞洁者与间谍登记：resolve execute 处决提名者，或 resolve continue 继续投票。":"猎手："+seat(dayDecision.actor)+" → "+seat(dayDecision.target)+"；"+(slayerRegistration(dayDecision)?"请裁定陌客登记。":slayerCanKill(dayDecision)?"有效命中恶魔，确认后死亡。":"无事发生，等待确认。 ");
         if(phase.equals("day")) {
-            if(activeVote!=null)return activeVote.ballots.size()==activeVote.order.size()?"本次提名的投票已齐，点击核算当前投票。":"正在顺时针收集投票，下一席为 "+seat(activeVote.order.get(activeVote.ballots.size()))+"；不要静默代投。";
+            if(activeVote!=null)return activeVote.ballots.size()==activeVote.order.size()?"本次提名的投票已齐，点击核算当前投票。":"所有座位可同时投票，已回应 "+activeVote.ballots.size()+" / "+players.size()+"；说书人确认计票前可以改票。";
             if(onBlock!=null)return "唯一最高票处刑候选为 "+seat(onBlock)+"。讨论结束后确认处刑，或继续合法提名。";
             return "白天讨论中：存活玩家可发起提名；无人处刑时点击进入夜晚。请检查魔典中的胜利提示。";
         }
@@ -814,7 +811,7 @@ public final class ClockGame {
                 if(activeVote!=null) {
                     title="第 "+dayNumber+" 天 · 提名投票";total=players.size();completed=activeVote.ballots.size();summary=seat(activeVote.nominee)+" 被提名，门槛 "+activeVote.threshold+" 票；已回应 "+completed+" / "+total+"，未回应默认不支持。";
                     if(!automationOnline)blockers.add("有本桌成员离线，等待重连。");
-                    if(completed<total){result.put("waitingFor",activeVote.order.get(completed).toString());result.put("waitingKind","vote");}
+                    if(completed<total){result.put("waitingKind","votes");}
                     primary=workflowAction("确认计票","closevote","","","day",completed==total?"确认核算全部席位的最终票？":"确认计票？未回应按不支持，已支持的幽灵票将消耗。",true);
                 } else if(onBlock!=null) {title="第 "+dayNumber+" 天 · 等待处决";summary=seat(onBlock)+" 为唯一最高票候选（"+bestVotes+"票）。可继续合法提名，讨论结束再处决。";primary=workflowAction("处决 "+seat(onBlock)+" 并结束白天","execute","","","day","确认处决 "+seat(onBlock)+"？该操作结束今天并检查胜负。",true);}
                 else {title="第 "+dayNumber+" 天 · 公开讨论";summary="存活玩家可从手机提名。无唯一最高票时，结束讨论可不处决进入夜晚。";primary=workflowAction("结束白天，无人处决","phase","night","","day","确认结束白天且无人被处决？先核对三人镇长条件。",false);}
@@ -857,7 +854,7 @@ public final class ClockGame {
         DayDecision d=dayDecision;
         if(d.kind.equals("virgin")) {
             if(override.equals("execute")){dayDecision=null;return execution(d.actor);}
-            if(override.equals("continue")){dayDecision=null;openVote(d.target);return "相关判定已确认，开始普通逐座投票。";}
+            if(override.equals("continue")){dayDecision=null;openVote(d.target);return "相关判定已确认，开始普通投票，所有座位可同时回应。";}
             return "请输入 execute 或 continue 裁定贞洁者与间谍。";
         }
         boolean canKill=slayerCanKill(d), registration=slayerRegistration(d);
@@ -905,7 +902,7 @@ public final class ClockGame {
         Map<String,Object> view=new LinkedHashMap<>();view.put("game","clock");view.put("script","trouble_brewing");view.put("phase",phase);view.put("started",started);view.put("finished",finished);view.put("winner",winner);view.put("night",nightNumber);view.put("day",dayNumber);view.put("storyteller",storyteller.toString());view.put("reviewEnabled",reviewEnabled);view.put("voteTimeoutSeconds",voteTimeoutSeconds);
         List<Map<String,Object>> seats=new ArrayList<>();for(UUID p:players){Map<String,Object> row=new LinkedHashMap<>();row.put("uuid",p.toString());row.put("seat",seatNumber(p));row.put("dead",publicDead.contains(p));row.put("ghostVote",publicDead.contains(p)&&!spentGhost.contains(p));seats.add(row);}view.put("seats",seats);
         view.put("onBlock",onBlock==null?"":onBlock.toString());view.put("bestVotes",bestVotes);view.put("announcements",List.copyOf(announcements));
-        if(activeVote!=null){Map<String,Object> voting=new LinkedHashMap<>();voting.put("nominee",activeVote.nominee.toString());voting.put("threshold",activeVote.threshold);int step=activeVote.ballots.size();voting.put("nextVoter",step<players.size()?activeVote.order.get(step).toString():"");voting.put("counted",step);voting.put("order",activeVote.order.stream().map(UUID::toString).toList());voting.put("deadline",activeVote.deadline);voting.put("remainingTicks",activeVote.remainingTicks);voting.put("timeoutSeconds",voteTimeoutSeconds);voting.put("paused",!automationOnline);view.put("vote",voting);}
+        if(activeVote!=null){Map<String,Object> voting=new LinkedHashMap<>();voting.put("nominee",activeVote.nominee.toString());voting.put("threshold",activeVote.threshold);voting.put("simultaneous",true);voting.put("nextVoter","");voting.put("counted",activeVote.ballots.size());voting.put("order",activeVote.order.stream().map(UUID::toString).toList());voting.put("deadline",activeVote.deadline);voting.put("remainingTicks",activeVote.remainingTicks);voting.put("timeoutSeconds",voteTimeoutSeconds);voting.put("paused",!automationOnline);view.put("vote",voting);}
         return view;
     }
     /** Only each recipient's sleep bit is sent by the presentation layer. */
@@ -928,10 +925,13 @@ public final class ClockGame {
         }
         if(activeVote!=null) {
             @SuppressWarnings("unchecked") Map<String,Object> voting=(Map<String,Object>)view.get("vote");
-            if(st(viewer)){Map<String,Boolean> ballots=new LinkedHashMap<>();activeVote.ballots.forEach((id,value)->ballots.put(id.toString(),value));voting.put("ballots",ballots);}
-            else if(players.contains(viewer)){boolean responded=activeVote.ballots.containsKey(viewer);voting.put("hasVoted",responded);voting.put("myVote",activeVote.ballots.get(viewer));voting.put("mayVote",automationOnline&&(responded||activeVote.ballots.size()<players.size()&&activeVote.order.get(activeVote.ballots.size()).equals(viewer)));voting.put("maySupport",!dead.contains(viewer)||!spentGhost.contains(viewer));}
+            if(st(viewer)){Map<String,Boolean> ballots=new LinkedHashMap<>();activeVote.ballots.forEach((id,value)->ballots.put(id.toString(),value));voting.put("ballots",ballots);voting.put("supportCount",activeVote.ballots.values().stream().filter(Boolean.TRUE::equals).count());voting.put("effectiveCount",pendingVoteCount());voting.put("voters",players.stream().map(id->{Map<String,Object> row=new LinkedHashMap<>();row.put("uuid",id.toString());row.put("seat",seatNumber(id));row.put("responded",activeVote.ballots.containsKey(id));row.put("support",Boolean.TRUE.equals(activeVote.ballots.get(id)));row.put("counts",countsVote(id));return row;}).toList());}
+            else if(players.contains(viewer)){boolean responded=activeVote.ballots.containsKey(viewer);voting.put("hasVoted",responded);voting.put("myVote",activeVote.ballots.get(viewer));voting.put("mayVote",automationOnline);voting.put("maySupport",!dead.contains(viewer)||!spentGhost.contains(viewer));}
         }
         if(canReview(viewer)){view.put("flowLog",List.copyOf(flowLog));if(!st(viewer))view.put("reviewGrimoire",grimoire());}
         return view;
     }
+    /** A read-only preview: ghost votes are consumed only by the confirmed tally. */
+    private boolean countsVote(UUID player){return activeVote!=null&&Boolean.TRUE.equals(activeVote.ballots.get(player))&&!("butler".equals(roles.get(player))&&healthy(player)&&!Boolean.TRUE.equals(activeVote.ballots.get(master)));}
+    private long pendingVoteCount(){return activeVote.ballots.keySet().stream().filter(this::countsVote).count();}
 }

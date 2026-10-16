@@ -7,7 +7,7 @@
   "authors": [
     "Workspace project"
   ],
-  "license": "GPL-3.0-only",
+  "license": "LicenseRef-Personal-Prototype",
   "environment": "*",
   "entrypoints": {
     "main": [

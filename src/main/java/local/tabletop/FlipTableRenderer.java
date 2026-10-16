@@ -23,6 +23,10 @@ public final class FlipTableRenderer {
     /** Owned by one session; reusable displays prevent every draw from respawning the whole table. */
     public static final class Scene {
         private static final int TABLE_COLUMNS=5;
+        private static final int HEAD_COLUMNS=7;
+        private static final float HEAD_SCALE=1.30f;
+        private static final double HEAD_GAP=.80,HEAD_ROW_GAP=1.12;
+        private static final int PUBLIC_CARD_MODEL=121101;
         private static final double TABLE_ROW_GAP=.56;
         private static final int TURNOVER_TICKS=12;
         // _card.json ground translation is 1.5 model pixels above the item origin.
@@ -32,12 +36,13 @@ public final class FlipTableRenderer {
         private final List<Turnover> turnovers=new ArrayList<>();
         private final List<Entity> transientEntities=new ArrayList<>();
         private final Map<UUID,DisplayEntity.TextDisplayEntity> headScores=new LinkedHashMap<>();
+        private final Map<UUID,List<HeadCard>> headCards=new LinkedHashMap<>();
         private ServerWorld sceneWorld;
         private int round=-1;
         private double originX,originY,originZ;
 
         public List<Entity> entities(){var all=new ArrayList<Entity>();for(Node n:nodes.values())all.add(n.entity);all.addAll(transientEntities);return all;}
-        public void clear(){for(Entity e:entities())e.discard();nodes.clear();flights.clear();turnovers.clear();transientEntities.clear();headScores.clear();sceneWorld=null;round=-1;}
+        public void clear(){for(Entity e:entities())e.discard();nodes.clear();flights.clear();turnovers.clear();transientEntities.clear();headScores.clear();headCards.clear();sceneWorld=null;round=-1;}
 
         public void update(ServerWorld world,BlockPos anchor,Map<String,Object> state,Function<UUID,String> names,List<FlipGame.Reveal> reveals,long now){
             update(world,anchor,state,names,reveals,now,Map.of());
@@ -49,6 +54,7 @@ public final class FlipTableRenderer {
             originX=anchor.getX()+.5;originY=anchor.getY()+.025;originZ=anchor.getZ()+.5;
             double radius=players.size()<=9?2.25:2.25+(players.size()-9)*.15;
             Set<String> used=new HashSet<>();Set<FlipGame.Reveal> settled=new HashSet<>();
+            headCards.clear();
             int index=0;
             for(var entry:players.entrySet()){
                 if(!(entry.getValue() instanceof Map<?,?> seat))continue;
@@ -80,6 +86,25 @@ public final class FlipTableRenderer {
                 label(world,used,"seat:"+id,number+"号 · "+names.apply(id)+"\n累计 "+seat.get("total")+" · 本轮 "+seat.get("roundScore")+" · "+badge,cx+rx*.35,cy+.25,cz+rz*.35,.23f);
                 label(world,used,"head:"+id,"累计 "+seat.get("total")+" 分  |  本轮 "+seat.get("roundScore")+" 分\n"+badge,cx,cy+2.3,cz,.40f);
                 headScores.put(id,(DisplayEntity.TextDisplayEntity)nodes.get("head:"+id).entity);
+                // Public cards are repeated above the owner, independently of their table props.
+                // Both busting duplicates remain face-up; spent actions stay only on the table.
+                // Retained effects follow the hand, so consumed Second Chance also disappears.
+                var publicCards=new ArrayList<String>(numbers);publicCards.addAll(heldModifiers);
+                var heads=new ArrayList<HeadCard>();
+                for(int cardIndex=0;cardIndex<publicCards.size();cardIndex++){
+                    int row=cardIndex/HEAD_COLUMNS,count=Math.min(HEAD_COLUMNS,publicCards.size()-row*HEAD_COLUMNS);
+                    String key=publicCards.get(cardIndex),nodeId="headcard:"+id+":"+cardIndex;used.add(nodeId);
+                    Node node=nodes.get(nodeId);
+                    if(node==null||node.entity.isRemoved()||!node.key.equals(key)){
+                        if(node!=null)node.entity.discard();
+                        var item=item(world,key);var publicStack=stack(key);
+                        publicStack.set(net.minecraft.component.DataComponentTypes.CUSTOM_MODEL_DATA,new net.minecraft.component.type.CustomModelDataComponent(PUBLIC_CARD_MODEL));
+                        item.setItemStack(publicStack);item.setTransformationMode(ModelTransformationMode.FIXED);item.setBillboardMode(DisplayEntity.BillboardMode.CENTER);item.setViewRange(2f);item.addCommandTag("tabletop_flip_head_card");
+                        node=new Node(nodeId,key,item);nodes.put(nodeId,node);
+                    }
+                    heads.add(new HeadCard((DisplayEntity.ItemDisplayEntity)node.entity,(cardIndex%HEAD_COLUMNS-(count-1)/2.0)*HEAD_GAP,2.05+row*HEAD_ROW_GAP));
+                }
+                headCards.put(id,List.copyOf(heads));
                 // Revealed action/discard cards remain visible briefly even if not retained in the hand.
                 for(FlipGame.Reveal reveal:reveals)if(reveal.player().equals(id)&&!settled.contains(reveal)){
                     var e=item(world,reveal.cardId());transientEntities.add(e);
@@ -150,6 +175,13 @@ public final class FlipTableRenderer {
                 if(visible)display.setPosition(player.getX(),player.getEyeY()+1.05,player.getZ());
                 display.setTransformation(new AffineTransformation(new Vector3f(),new Quaternionf(),new Vector3f(visible?.40f:0),new Quaternionf()));
             }
+            if(sceneWorld!=null&&now%5==0)for(var entry:headCards.entrySet()){
+                var player=sceneWorld.getServer().getPlayerManager().getPlayer(entry.getKey());boolean visible=player!=null&&player.getWorld()==sceneWorld;
+                for(HeadCard card:entry.getValue())if(!card.entity.isRemoved()){
+                    if(visible)card.entity.setPosition(player.getX(),player.getEyeY(),player.getZ());
+                    card.entity.setTransformation(new AffineTransformation(new Vector3f((float)card.x,(float)card.y,0),new Quaternionf(),new Vector3f(visible?HEAD_SCALE:0),new Quaternionf()));
+                }
+            }
             Iterator<Flight> it=flights.iterator();while(it.hasNext()){
                 Flight f=it.next();if(f.entity.isRemoved()){transientEntities.remove(f.entity);it.remove();continue;}
                 double t=Math.clamp((now-f.start)/18.0,0,1),ease=t*t*(3-2*t);
@@ -179,6 +211,7 @@ public final class FlipTableRenderer {
             Node(String id,String key,Entity entity){this.id=id;this.key=key;this.entity=entity;}
         }
         private record TablePose(double x,double y,double z,float scale,float rotation){}
+        private record HeadCard(DisplayEntity.ItemDisplayEntity entity,double x,double y){}
         private record Turnover(Node node,long start){}
         private static final class Flight {
             final DisplayEntity.ItemDisplayEntity entity;final String key;final float scale;final long start;final boolean temporary;

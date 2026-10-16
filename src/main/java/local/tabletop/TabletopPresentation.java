@@ -22,6 +22,7 @@ final class TabletopPresentation {
     private static final Map<UUID,Sleep> SLEEPERS=new HashMap<>();
     private static final Map<UUID,String> VISION=new HashMap<>();
     private static final Map<String,ServerBossBar> PHASE_BARS=new HashMap<>();
+    private static final Map<UUID,net.minecraft.entity.decoration.DisplayEntity.TextDisplayEntity> SEAT_LABELS=new HashMap<>();
     static int seat(Sessions.Session s,UUID id){if(s.type.equals("clock")){Sessions.clockPlayers(s);return s.clockSeats.number(id);}return Sessions.flipSeat(s,id);}
     static boolean storyteller(Sessions.Session s,UUID id){return s.type.equals("clock")&&s.host.equals(id);}
     static String originalTeam(ServerPlayerEntity player){Label known=LABELS.get(player.getUuid());if(known!=null)return known.previous;Team team=player.getServer().getScoreboard().getScoreHolderTeam(player.getGameProfile().getName());return team==null?"":team.getName();}
@@ -41,10 +42,25 @@ final class TabletopPresentation {
             Text prefix=disguised?Text.empty():Text.literal(storyteller(s,id)?"说书人 ":seat(s,id)+"号 ").styled(style->style.withColor(color(s,id)));
             if(!team.getPrefix().equals(prefix))team.setPrefix(prefix);
             var teamColor=storyteller(s,id)?Formatting.GOLD:Formatting.WHITE;if(team.getColor()!=teamColor)team.setColor(teamColor);
-            var visibility=disguised?AbstractTeam.VisibilityRule.NEVER:AbstractTeam.VisibilityRule.ALWAYS;
+            var visibility=s.type.equals("clock")||disguised?AbstractTeam.VisibilityRule.NEVER:AbstractTeam.VisibilityRule.ALWAYS;
             if(team.getNameTagVisibilityRule()!=visibility)team.setNameTagVisibilityRule(visibility);
             if(team.shouldShowFriendlyInvisibles())team.setShowFriendlyInvisibles(false);
             if(board.getScoreHolderTeam(name)!=team)board.addScoreHolderToTeam(name,team);
+        }
+        tickLabels(s,server);
+    }
+    /** Clock exposes only seat numbers in the world, rather than profile IDs or team titles. */
+    static void tickLabels(Sessions.Session s,MinecraftServer server){
+        if(!s.type.equals("clock"))return;
+        for(UUID id:s.audience()){
+            var player=server.getPlayerManager().getPlayer(id);var label=SEAT_LABELS.get(id);
+            boolean visible=player!=null&&player.isAlive()&&player.getWorld().getRegistryKey().equals(s.dimension)&&!ClockEmbodiment.disguised(id)&&(storyteller(s,id)||s.clock==null||!s.clock.isNight());
+            if(label==null&&player!=null){label=new net.minecraft.entity.decoration.DisplayEntity.TextDisplayEntity(net.minecraft.entity.EntityType.TEXT_DISPLAY,player.getServerWorld());label.setBillboardMode(net.minecraft.entity.decoration.DisplayEntity.BillboardMode.CENTER);label.setViewRange(1);label.addCommandTag("tabletop_clock_seat_label");player.getServerWorld().spawnEntity(label);SEAT_LABELS.put(id,label);}
+            if(label==null)continue;
+            if(player!=null&&label.getWorld()!=player.getWorld()){label.discard();SEAT_LABELS.remove(id);continue;}
+            label.setText(Text.literal(storyteller(s,id)?"说书人":seat(s,id)+"号").styled(style->style.withColor(color(s,id))));
+            if(visible)label.setPosition(player.getX(),player.getEyeY()+.38,player.getZ());
+            label.setTransformation(new net.minecraft.util.math.AffineTransformation(new org.joml.Vector3f(),new org.joml.Quaternionf(),new org.joml.Vector3f(visible?.35f:0),new org.joml.Quaternionf()));
         }
     }
     static void night(Sessions.Session s,MinecraftServer server){
@@ -76,6 +92,7 @@ final class TabletopPresentation {
     }
     static void disconnect(ServerPlayerEntity player){restoreVision(player.getUuid());VISION.remove(player.getUuid());for(var bar:PHASE_BARS.values())bar.removePlayer(player);}
     static void release(UUID id){
+        var seatLabel=SEAT_LABELS.remove(id);if(seatLabel!=null)seatLabel.discard();
         restoreVision(id);VISION.remove(id);Label label=LABELS.remove(id);if(label==null)return;
         var board=label.server.getScoreboard();Team owned=board.getTeam(label.owned);
         boolean ours=owned!=null&&board.getScoreHolderTeam(label.name)==owned;
@@ -85,5 +102,5 @@ final class TabletopPresentation {
         var player=label.server.getPlayerManager().getPlayer(id);if(player!=null){for(var bar:PHASE_BARS.values())bar.removePlayer(player);Sessions.sendPresentation(player,Map.of("kind","night_vision","active",false,"night",false));resetTime(player);}
         PHASE_BARS.entrySet().removeIf(entry->{if(!entry.getValue().getPlayers().isEmpty())return false;entry.getValue().clearPlayers();return true;});
     }
-    static void clear(){for(UUID id:new HashSet<>(LABELS.keySet()))release(id);for(UUID id:new HashSet<>(SLEEPERS.keySet()))restoreVision(id);for(var bar:PHASE_BARS.values())bar.clearPlayers();PHASE_BARS.clear();VISION.clear();}
+    static void clear(){for(UUID id:new HashSet<>(LABELS.keySet()))release(id);for(var label:SEAT_LABELS.values())label.discard();SEAT_LABELS.clear();for(UUID id:new HashSet<>(SLEEPERS.keySet()))restoreVision(id);for(var bar:PHASE_BARS.values())bar.clearPlayers();PHASE_BARS.clear();VISION.clear();}
 }

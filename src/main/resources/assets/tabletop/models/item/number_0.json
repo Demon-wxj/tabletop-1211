@@ -2,5 +2,13 @@
   "parent": "tabletop:item/_card",
   "textures": {
     "front": "tabletop:item/number_0"
-  }
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 121101
+      },
+      "model": "tabletop:item/_public_number_0"
+    }
+  ]
 }

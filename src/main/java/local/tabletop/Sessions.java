@@ -500,11 +500,11 @@ public final class Sessions {
                     for(var e:s.groups.entrySet())if(e.getValue().contains(p.getUuid()))body.add("私密小组 "+e.getKey()+"："+String.join("、",e.getValue().stream().map(id->name(s,id)).toList()));
                     var groupViews=new ArrayList<Map<String,Object>>();for(var group:s.groups.entrySet())if(group.getValue().contains(p.getUuid()))groupViews.add(Map.of("key",group.getKey(),"name","私密小组 "+group.getKey(),"members",group.getValue().stream().map(id->name(s,id)).toList()));view.put("groups",groupViews);
                     var visible=s.messages.stream().filter(m->m.recipients.contains(p.getUuid())).toList();var chats=new ArrayList<Map<String,Object>>();int start=Math.max(0,visible.size()-18);for(int i=start;i<visible.size();i++){var m=visible.get(i);String key=m.channelKey;if(!key.equals("public")&&!s.groups.containsKey(key)){UUID peer=m.author.equals(p.getUuid())?m.recipients.stream().filter(id->!id.equals(p.getUuid())).findFirst().orElse(p.getUuid()):m.author;key=peer.equals(s.host)?"storyteller":peer.toString();}chats.add(Map.of("key",key,"sender",m.sender,"text",m.text,"outgoing",m.author.equals(p.getUuid()),"sequence",m.sequence));}view.put("chats",chats);
-                    if(s.clock!=null){Map<String,Object> own=readingState(s,p.getUuid());body.add("阶段："+human(own.get("phase"),s));if(own.get("vote") instanceof Map<?,?> voting){body.add("投票目标："+human(voting.get("nominee"),s)+" · 当前投票人："+human(voting.get("nextVoter"),s));}Object publicMessages=own.get("announcements");if(publicMessages instanceof Collection<?> list)for(Object message:list.stream().skip(Math.max(0,list.size()-4)).toList())body.add("[公共公告] "+message);Object spy=own.get("spyGrimoire");if(spy!=null)body.add("[本夜获准查看的魔典] "+human(spy,s));Object pending=own.get("pendingTask");if(pending!=null)body.add("当前行动："+(pending instanceof Map<?,?> task?human(task.get("status"),s):"等待确认"));}
+                    if(s.clock!=null){Map<String,Object> own=readingState(s,p.getUuid());body.add("阶段："+human(own.get("phase"),s));if(own.get("vote") instanceof Map<?,?> voting){body.add("投票目标："+human(voting.get("nominee"),s)+" · 所有座位同时投票 · 已回应 "+human(voting.get("counted"),s));}Object publicMessages=own.get("announcements");if(publicMessages instanceof Collection<?> list)for(Object message:list.stream().skip(Math.max(0,list.size()-4)).toList())body.add("[公共公告] "+message);Object spy=own.get("spyGrimoire");if(spy!=null)body.add("[本夜获准查看的魔典] "+human(spy,s));Object pending=own.get("pendingTask");if(pending!=null)body.add("当前行动："+(pending instanceof Map<?,?> task?human(task.get("status"),s):"等待确认"));}
                     if(s.flip!=null){Map<String,Object> state=s.flip.publicView();body.add("当前行动玩家："+human(state.get("turn"),s));body.add("自动下一轮："+(s.flip.autoNext()?"开启，轮末展示后推进":"关闭，由主持人推进"));if(state.get("autoNextInTicks") instanceof Number remaining)body.add("结果展示剩余约 "+Math.max(1,(remaining.longValue()+19)/20)+" 秒。");if(state.get("pendingOwner")!=null)body.add("待选目标："+human(state.get("pendingKind"),s)+" · "+human(state.get("pendingOwner"),s));Map<?,?> own=state.get("players") instanceof Map<?,?> rows&&rows.get(p.getUuid().toString()) instanceof Map<?,?> row?row:Map.of();if(Boolean.TRUE.equals(own.get("canDraw")))button(buttons,"翻牌","draw","","");if(Boolean.TRUE.equals(own.get("canStay")))button(buttons,"收手","stay","","");if(Boolean.TRUE.equals(own.get("canSelectTarget")))button(buttons,"牌的目标","target","$target","");if(s.host.equals(p.getUuid())&&s.flip.roundOver()&&!s.flip.finished())button(buttons,"开始下一轮","next","","");if(s.host.equals(p.getUuid())&&s.flip.finished())button(buttons,"准备下一局","reset","","");button(buttons,"七连翻规则书","open","flip_rules_book","");}
                     if(s.flip==null&&s.type.equals("flip")){body.add("准备阶段："+s.roster.size()+" / 8 人；至少3人同时在线、红色1号有人才能开始。主持人也参与七连翻。");String issue=flipStartIssue(s);if(!issue.isEmpty())body.add(issue);button(buttons,"七连翻规则书","open","flip_rules_book","");if(s.host.equals(p.getUuid()))stateButton(buttons,"开始七连翻","start","","",flipReady(s),issue);}
                     if(s.clock==null&&s.type.equals("clock")){body.add(clockGatheringLabel(s));button(buttons,"角色技能","open","script_card","");}
-                    if(s.clock!=null){Map<String,Object> own=readingState(s,p.getUuid());if(own.get("pendingTask") instanceof Map<?,?> pending&&pending.get("targetCount") instanceof Number count&&count.intValue()>0&&"awaiting_player".equals(pending.get("status")))button(buttons,"提交夜间选择","submit","$target","");if(Boolean.TRUE.equals(own.get("canNominate")))button(buttons,"提名","nominate","$target","");if(own.get("vote") instanceof Map<?,?> voting&&s.roster.containsKey(p.getUuid())){boolean mayVote=Boolean.TRUE.equals(voting.get("mayVote")),maySupport=Boolean.TRUE.equals(voting.get("maySupport"));String waiting=!s.offline.isEmpty()?"本桌有人离线，等待重连后继续。":"等待 "+human(voting.get("nextVoter"),s)+" 回应投票。";stateButton(buttons,"举手赞成","vote","yes","",mayVote&&maySupport,!mayVote?waiting:!maySupport?"你的最后一张幽灵票已使用，只能不支持。":"");stateButton(buttons,"不支持","vote","no","",mayVote,mayVote?"":waiting);if(Boolean.TRUE.equals(voting.get("myVote")))stateButton(buttons,"取消赞成","unvote","","",mayVote,mayVote?"":waiting);}if(Boolean.TRUE.equals(own.get("canClaimSlayer")))button(buttons,"宣称猎手","slay","$target","");if(s.clock.finished()&&s.clock.canReview(p.getUuid()))button(buttons,"查看完整复盘","open","clock_review","");}
+                    if(s.clock!=null){Map<String,Object> own=readingState(s,p.getUuid());if(own.get("pendingTask") instanceof Map<?,?> pending&&pending.get("targetCount") instanceof Number count&&count.intValue()>0&&"awaiting_player".equals(pending.get("status")))button(buttons,"提交夜间选择","submit","$target","");if(Boolean.TRUE.equals(own.get("canNominate")))button(buttons,"提名","nominate","$target","");if(own.get("vote") instanceof Map<?,?> voting&&s.roster.containsKey(p.getUuid())){boolean mayVote=Boolean.TRUE.equals(voting.get("mayVote")),maySupport=Boolean.TRUE.equals(voting.get("maySupport"));String waiting=!s.offline.isEmpty()?"本桌有人离线，等待重连后继续。":"当前无法投票，请等待本桌恢复联机。";stateButton(buttons,"举手赞成","vote","yes","",mayVote&&maySupport,!mayVote?waiting:!maySupport?"你的最后一张幽灵票已使用，只能不支持。":"");stateButton(buttons,"不支持","vote","no","",mayVote,mayVote?"":waiting);if(Boolean.TRUE.equals(voting.get("myVote")))stateButton(buttons,"取消赞成","unvote","","",mayVote,mayVote?"":waiting);}if(Boolean.TRUE.equals(own.get("canClaimSlayer")))button(buttons,"宣称猎手","slay","$target","");if(s.clock.finished()&&s.clock.canReview(p.getUuid()))button(buttons,"查看完整复盘","open","clock_review","");}
                     button(buttons,"建私密小组","group","$target","");button(buttons,"查看身份卡","open","identity_card","");if(s.type.equals("clock")&&s.host.equals(p.getUuid()))button(buttons,"说书人魔典助手","open","grimoire","");
                     if((!s.running||s.ended())&&!(s.type.equals("clock")&&s.host.equals(p.getUuid())))groupedButton(buttons,s.host.equals(p.getUuid())?"关闭本桌":"离开本桌",s.host.equals(p.getUuid())?"close":"leave","","","flow",s.host.equals(p.getUuid())?"确认关闭本桌并让所有玩家离桌？":"确认离开本桌？",false);
                     if(!s.offline.isEmpty())for(int i=0;i<buttons.size();i++){Map<String,String> action=buttons.get(i);if(Set.of("draw","stay","target","start","nominate","vote","unvote","slay").contains(action.get("action"))){Map<String,String> disabled=new LinkedHashMap<>(action);disabled.put("enabled","false");disabled.put("reason","本桌有人离线，等待重连后继续。");buttons.set(i,disabled);}}
@@ -695,8 +695,18 @@ public final class Sessions {
         var task=s.clock.physicalTask();
         if(task!=null&&!task.key().equals(s.promptedTask)&&s.offline.isEmpty()){
             s.promptedTask=task.key();
-            privateStoryteller(s,task.actor(),task.targetCount()>0?"到你了，请选择目标。":"到你了，请查看说书人的信息。",server);
+            privateStoryteller(s,task.actor(),clockTurnMessage(s,task),server);
         }
+    }
+    private static String clockTurnMessage(Session s,ClockGame.PhysicalTask task){
+        RoleCatalog.Role role=RoleCatalog.get(task.role());
+        String ability=role==null?switch(task.role()){case "minion_info"->"爪牙互认，等待说书人私下发送信息。";case "demon_info"->"恶魔信息与诈唬，等待说书人私下发送信息。";default->"等待说书人发送本步信息。";}:role.name()+" · "+role.ability();
+        return "轮到你行动 · "+ability+(task.submitted()?" 已提交本次选择，等待说书人确认。":task.targetCount()>0?" 本次请选择 "+task.targetCount()+" 名不同玩家，通过手机提交给说书人。":" 本步无需选人，请查看说书人的私密信息。");
+    }
+    /** Review control/reconnect may replay only the controlled recipient's current prompt. */
+    public static void remindClockTurn(ServerPlayerEntity p){
+        Session s=GAMES.get(MEMBERS.get(p.getUuid()));if(s==null||s.clock==null||!s.offline.isEmpty())return;
+        var task=s.clock.physicalTask();if(task!=null&&task.actor().equals(p.getUuid()))p.sendMessage(TabletopMessages.privateLine(clockTurnMessage(s,task)),false);
     }
     private static void privateStoryteller(Session s,UUID recipient,String message,MinecraftServer server){
         sendMessage(s,s.host,recipient.toString(),message);
@@ -711,8 +721,8 @@ public final class Sessions {
     public static void tick(MinecraftServer server) {
         FlipInventory.tick(server);ClockEmbodiment.tick(server);
         for(Session s:GAMES.values()) {
-            if(server.getTicks()%5==0)FlipTurnBar.syncAudience(s,server);
-            if(server.getTicks()%20==0)TabletopPresentation.night(s,server);
+            if(server.getTicks()%5==0){FlipTurnBar.syncAudience(s,server);TabletopPresentation.tickLabels(s,server);}
+            if(server.getTicks()%20==0){TabletopPresentation.labels(s,server);TabletopPresentation.night(s,server);}
             s.flipScene.tick(server.getTicks());
             if(s.flip!=null&&s.flip.roundOver()&&!s.flip.finished()) {
                 Object before=s.flip.publicView().get("autoNextAtTick");String result=s.flip.updateAutomation(server.getTicks(),s.offline.isEmpty());Object after=s.flip.publicView().get("autoNextAtTick");
@@ -732,11 +742,15 @@ public final class Sessions {
         if(s.flip==null)return;var reveals=s.flip.drainReveals();FlipInventory.update(s,server,reveals);ServerWorld world=server.getWorld(s.dimension);if(world==null)return;s.flipScene.update(world,s.anchor,flipPublicState(s),id->name(s,id),reveals,server.getTicks(),FlipTableLayout.seats(s));FlipEffects.play(world,s.flip.drainEffects());s.displays.clear();s.displays.addAll(s.flipScene.entities());
     }
     private static void renderClockTable(Session s,MinecraftServer server,Map<String,Object> state){
-        String signature=String.valueOf(state.get("seats"))+state.get("phase")+state.get("onBlock")+state.get("winner");if(signature.equals(s.clockDisplayState))return;
+        ClockArena.Layout layout=ClockArena.get(s,server);
+        String signature=String.valueOf(state.get("seats"))+state.get("phase")+state.get("onBlock")+state.get("winner")+(layout==null?"":layout.seats);if(signature.equals(s.clockDisplayState))return;
         ServerWorld world=server.getWorld(s.dimension);if(world==null)return;clearDisplays(s);s.clockDisplayState=signature;
         if(state.get("seats") instanceof List<?> seats)for(int i=0;i<seats.size();i++){
             if(!(seats.get(i) instanceof Map<?,?> seat))continue;
-            double angle=2*Math.PI*i/seats.size(),x=s.anchor.getX()+.5+2.2*Math.cos(angle),z=s.anchor.getZ()+.5+2.2*Math.sin(angle),y=s.anchor.getY()+.08;
+            int number=seat.get("seat") instanceof Number n?n.intValue():i+1;
+            ClockArena.Point point=layout==null?null:layout.seats.get(number);
+            double angle=2*Math.PI*i/seats.size(),yaw=point==null?0:Math.toRadians(point.yaw());
+            double x=point==null?s.anchor.getX()+.5+2.2*Math.cos(angle):point.x()+Math.cos(yaw)*.9,z=point==null?s.anchor.getZ()+.5+2.2*Math.sin(angle):point.z()+Math.sin(yaw)*.9,y=point==null?s.anchor.getY()+.08:point.y()+.08;
             s.displays.add(display(world,"identity_card",x,y,z,.8f));
             if(Boolean.TRUE.equals(seat.get("dead")))s.displays.add(display(world,"death_shroud",x,y+.04,z,.8f));
             var label=new DisplayEntity.TextDisplayEntity(net.minecraft.entity.EntityType.TEXT_DISPLAY,world);

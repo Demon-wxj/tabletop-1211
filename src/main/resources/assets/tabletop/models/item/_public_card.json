@@ -1,0 +1,6 @@
+{
+  "parent": "tabletop:item/_card",
+  "textures": {
+    "back": "#front"
+  }
+}

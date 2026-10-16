@@ -83,7 +83,15 @@ public final class ClockArena {
         save(p.getServer());return "钟楼场地已保存。";
     }
     private static boolean validPoint(ServerWorld world,Point p){return p!=null&&Double.isFinite(p.x)&&Double.isFinite(p.y)&&Double.isFinite(p.z)&&Float.isFinite(p.yaw)&&Float.isFinite(p.pitch)&&Math.abs(p.x)<29_999_984&&Math.abs(p.z)<29_999_984&&!world.isOutOfHeightLimit(p.block())&&world.getWorldBorder().contains(p.block());}
-    private static boolean safePoint(ServerWorld world,Point p){if(!validPoint(world,p))return false;return world.isSpaceEmpty(new net.minecraft.util.math.Box(p.x-.29,p.y+.01,p.z-.29,p.x+.29,p.y+1.8,p.z+.29))&&!world.isSpaceEmpty(new net.minecraft.util.math.Box(p.x-.29,p.y-.06,p.z-.29,p.x+.29,p.y+.001,p.z+.29));}
+    private static boolean safePoint(ServerWorld world,Point p){
+        if(!validPoint(world,p))return false;
+        // Collision views skip unloaded chunks; inspect the actual terrain beneath
+        // every part of the player's footprint, even when nobody is nearby.
+        int minX=net.minecraft.util.math.MathHelper.floor(p.x-.29)>>4,maxX=net.minecraft.util.math.MathHelper.floor(p.x+.29)>>4;
+        int minZ=net.minecraft.util.math.MathHelper.floor(p.z-.29)>>4,maxZ=net.minecraft.util.math.MathHelper.floor(p.z+.29)>>4;
+        for(int x=minX;x<=maxX;x++)for(int z=minZ;z<=maxZ;z++)world.getChunk(x,z);
+        return world.isBlockSpaceEmpty(null,new net.minecraft.util.math.Box(p.x-.29,p.y+.01,p.z-.29,p.x+.29,p.y+1.8,p.z+.29))&&!world.isBlockSpaceEmpty(null,new net.minecraft.util.math.Box(p.x-.29,p.y-.06,p.z-.29,p.x+.29,p.y+.001,p.z+.29));
+    }
     public static String issue(Sessions.Session s,MinecraftServer server){
         Layout layout=get(s,server);if(layout==null)return "尚未配置钟楼场地。";ServerWorld world=server.getWorld(s.dimension);if(world==null||!s.dimension.getValue().toString().equals(layout.dimension))return "场地维度不匹配。";
         if(!safePoint(world,layout.center))return "请设置有地面和两格净空的中间说书人位置。";if(!safePoint(world,layout.jail))return "请设置有地面和两格净空的处决牢笼位置。";

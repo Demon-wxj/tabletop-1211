@@ -31,7 +31,7 @@ public final class GrimoireScreen extends Screen {
                         boolean poisoned, boolean drunk, boolean redHerring, boolean used,
                         boolean safe, boolean ghostVote) {}
     private record Task(String role, String actor, String status, boolean current,
-                        boolean impaired, List<String> targets) {}
+                        boolean impaired, boolean fakeRole, List<String> targets) {}
     private record Action(String label, String action, String target, String text,
                           String group, String confirm, boolean enabled, String reason, String context) {}
     private enum Tab { TABLE, NIGHT, SETUP, LOG }
@@ -53,7 +53,7 @@ public final class GrimoireScreen extends Screen {
     private String modalTarget="", modalText="", modalKey="", selectedRole="", roleType="townsfolk";
     private String waitingAction="";
     private long generation=Long.MIN_VALUE, modalGeneration, logPage=1, logPages=1, logCount;
-    private int ticks, waitingSince, noticeTick, actionPage, seatPage, modalScroll, logScroll, nightScroll;
+    private int ticks, waitingSince, noticeTick, actionPage, seatPage, modalScroll, logScroll, nightScroll, tableScroll;
     private int left, top, panelWidth, panelHeight, bodyTop, bodyBottom, actionTop, buttonHeight, actionColumns, actionSlots;
     private int gridTop, tileHeight, selectedY, popupLeft, popupTop, popupWidth, popupHeight;
     private boolean compact, noticeError;
@@ -115,7 +115,7 @@ public final class GrimoireScreen extends Screen {
         for(JsonElement e:array(state,"nightTasks"))if(e.isJsonObject()){
             JsonObject t=e.getAsJsonObject();var chosen=new ArrayList<String>();
             for(JsonElement target:array(t,"targets"))if(target.isJsonPrimitive())chosen.add(target.getAsString());
-            queue.add(new Task(str(t,"role"),str(t,"actor"),str(t,"status"),bool(t,"current"),bool(t,"impaired"),List.copyOf(chosen)));
+            queue.add(new Task(str(t,"role"),str(t,"actor"),str(t,"status"),bool(t,"current"),bool(t,"impaired"),bool(t,"fakeRole"),List.copyOf(chosen)));
         }
         tasks=List.copyOf(queue);
         var specs=new ArrayList<Action>();
@@ -297,7 +297,7 @@ public final class GrimoireScreen extends Screen {
     private void clearPrivateState(){
         data=new JsonObject();state=new JsonObject();contacts=List.of();seats=List.of();tasks=List.of();actions=List.of();roleChoices=List.of();logLines=List.of();
         selectedSeat="";notice="";keptText="";draftKey="";waitingAction="";modal=Modal.NONE;modalAction=null;modalTarget="";modalText="";taskKey="";modalKey="";
-        generation=Long.MIN_VALUE;session="";viewer="";actionPage=0;seatPage=0;modalScroll=0;logScroll=0;nightScroll=0;noticeError=false;tab=Tab.TABLE;
+        generation=Long.MIN_VALUE;session="";viewer="";actionPage=0;seatPage=0;modalScroll=0;logScroll=0;nightScroll=0;tableScroll=0;noticeError=false;tab=Tab.TABLE;
         if(textField!=null){textField.setText("");textField.visible=false;}
     }
 
@@ -348,19 +348,23 @@ public final class GrimoireScreen extends Screen {
         Seat selected=selected();
         JsonObject vote=object(state,"vote");
         String summary=selected==null?"":selected.number+"号 · 真 "+roleName(selected.role)+(!selected.shownRole.isBlank()&&!selected.shownRole.equals(selected.role)?" / 假 "+roleName(selected.shownRole):selected.dead?" · 亡":"");
-        if(selected==null&&vote.size()>0)summary="提名 · "+name(str(vote,"nominee"))+" / 轮到 "+name(str(vote,"nextVoter"));
+        if(selected==null&&vote.size()>0)summary=voteSummary(vote);
         small(c,summary,left+10,selectedY,panelWidth-(seatCount()>8?123:68),GOLD);
         int y=selectedY+(compact?14:25), h=actionTop-y-6;
         if(h>10){
             var rows=new ArrayList<String>();
-            if(selected!=null){rows.add(selected.number+"号 · "+name(selected.id)+" · 真实身份 "+roleName(selected.role));rows.add(flags(selected));if(!selected.shownRole.isBlank()&&!selected.shownRole.equals(selected.role))rows.add("假身份 · "+roleName(selected.shownRole));
+            if(vote.size()>0){rows.add(voteSummary(vote));for(JsonElement entry:array(vote,"voters"))if(entry.isJsonObject()){JsonObject ballot=entry.getAsJsonObject();rows.add(who(str(ballot,"uuid"))+" · "+(!bool(ballot,"responded")?"未回应":bool(ballot,"support")?"支持"+(bool(ballot,"counts")?"":"（管家票待主人支持）"):"不支持"));}}
+            Task current=tasks.stream().filter(Task::current).findFirst().orElse(null);
+            if(current!=null)rows.add("当前行动 · "+taskLine(current));
+            if(selected!=null){rows.add(selected.number+"号 · "+name(selected.id)+" · 真实身份 "+roleName(selected.role));rows.add(flags(selected));if(!selected.shownRole.isBlank()&&!selected.shownRole.equals(selected.role)){rows.add("假身份 · "+roleName(selected.shownRole));RoleCatalog.Role fake=RoleCatalog.get(selected.shownRole);if(fake!=null)rows.add("假身份技能 · "+fake.ability());}
                 String note=seatNote(selected.id);if(!note.isBlank())rows.add("备注 · "+note);
-                RoleCatalog.Role role=RoleCatalog.get(selected.role);if(role!=null)rows.add(role.ability());}
+                RoleCatalog.Role role=RoleCatalog.get(selected.role);if(role!=null)rows.add("真实技能 · "+role.ability());
+                for(Task task:tasks)if(task.actor.equals(selected.id)&&!task.current)rows.add("本夜行动 · "+taskLine(task));}
             String workflow=str(object(state,"workflow"),"summary");if(!workflow.isBlank())rows.add(workflow);
-            if(vote.size()>0)rows.add("投票 · "+name(str(vote,"nominee"))+" / 轮到 "+name(str(vote,"nextVoter")));
-            else if(!str(state,"onBlock").isBlank())rows.add("处决席 · "+name(str(state,"onBlock"))+" / "+number(state,"bestVotes",0)+" 票");
+            if(vote.size()==0&&!str(state,"onBlock").isBlank())rows.add("处决席 · "+name(str(state,"onBlock"))+" / "+number(state,"bestVotes",0)+" 票");
             if(tab==Tab.SETUP){JsonObject counts=object(state,"setupCounts");if(counts.size()>0)rows.add("镇 / 外 / 爪 / 魔  "+countText(array(counts,"actual"))+"（应配 "+countText(array(counts,"expected"))+"）");}
-            renderLines(c,wrapRows(rows,panelWidth-30),left+13,y,panelWidth-26,h,0,INK);
+            List<OrderedText> lines=wrapRows(rows,panelWidth-30);tableScroll=Math.clamp(tableScroll,0,Math.max(0,lines.size()*12-h));
+            renderLines(c,lines,left+13,y,panelWidth-26,h,tableScroll,INK);
         }
     }
 
@@ -387,10 +391,10 @@ public final class GrimoireScreen extends Screen {
     private void renderNight(DrawContext c) {
         Task current=tasks.stream().filter(Task::current).findFirst().orElse(null);int y=bodyTop+5;
         if(current!=null){rounded(c,left+10,bodyTop+2,panelWidth-20,compact?40:45,4,0xff4c3545);c.fill(left+10,bodyTop+5,left+12,bodyTop+(compact?39:44),GOLD);}
-        String headline=current==null?str(object(state,"workflow"),"summary"):name(current.actor)+" · "+roleName(current.role);
+        String headline=current==null?str(object(state,"workflow"),"summary"):who(current.actor)+" · "+roleName(current.role)+(current.fakeRole?"（酒鬼假身份）":"");
         small(c,headline.isBlank()?"暂无夜间待办":headline,left+13,y,panelWidth-26,GOLD);
         if(current!=null){small(c,statusLabel(current.status)+(current.impaired?" · 醉毒，请裁定":""),left+13,y+12,panelWidth-26,INK);
-            if(!current.targets.isEmpty())small(c,"选择 · "+String.join("、",current.targets.stream().map(this::name).toList()),left+13,y+24,panelWidth-26,MUTED);}
+            if(!current.targets.isEmpty())small(c,"选择 · "+String.join("、",current.targets.stream().map(this::who).toList()),left+13,y+24,panelWidth-26,MUTED);}
         int queueY=y+(current==null?15:39),h=actionTop-queueY-6;
         if(h>10){
             var rows=new ArrayList<String>();
@@ -398,7 +402,7 @@ public final class GrimoireScreen extends Screen {
             if(!warning.isBlank())rows.add("注意 · "+warning);
             if(!draft.isBlank())rows.add("待发 · "+draft);
             for(JsonElement e:array(object(state,"workflow"),"blockers"))if(e.isJsonPrimitive())rows.add(e.getAsString());
-            for(Task t:tasks)rows.add((t.current?"▶ ":"")+roleName(t.role)+" · "+name(t.actor)+" · "+statusLabel(t.status));
+            for(Task t:tasks)rows.add((t.current?"▶ ":"")+taskLine(t));
             List<OrderedText> lines=wrapRows(rows,panelWidth-30);nightScroll=Math.clamp(nightScroll,0,Math.max(0,lines.size()*12-h));
             renderLines(c,lines,left+13,queueY,panelWidth-26,h,nightScroll,INK);
         }
@@ -493,7 +497,7 @@ public final class GrimoireScreen extends Screen {
             int cell=(panelWidth-23)/4;
             for(int i=0;i<8;i++)if(inside(x,y,left+9+(i%4)*(cell+2),gridTop+(i/4)*(tileHeight+2),cell,tileHeight)){
                 int number=i+1+seatPage*8;Seat seat=seats.stream().filter(s->s.number==number).findFirst().orElse(null);
-                if(seat!=null){selectedSeat=seat.id;actionPage=0;updateControls();if(button==1&&!seatActions().isEmpty()){modal=Modal.STATE;modalScroll=0;updateControls();}}return true;
+                if(seat!=null){selectedSeat=seat.id;actionPage=0;tableScroll=0;updateControls();if(button==1&&!seatActions().isEmpty()){modal=Modal.STATE;modalScroll=0;updateControls();}}return true;
             }
         }
         return super.mouseClicked(x,y,button);
@@ -506,6 +510,7 @@ public final class GrimoireScreen extends Screen {
         if(y>=actionTop){actionPage+=vertical<0?1:-1;updateControls();return true;}
         if(tab==Tab.LOG){logScroll=Math.clamp(logScroll-(int)(vertical*24),0,maxLogScroll());return true;}
         if(tab==Tab.NIGHT){nightScroll=Math.max(0,nightScroll-(int)(vertical*24));return true;}
+        if(tab==Tab.TABLE||tab==Tab.SETUP){tableScroll=Math.max(0,tableScroll-(int)(vertical*24));return true;}
         return super.mouseScrolled(x,y,horizontal,vertical);
     }
     @Override public boolean keyPressed(int key,int scan,int modifiers) {
@@ -522,6 +527,9 @@ public final class GrimoireScreen extends Screen {
     private boolean isNight(){return str(state,"phase").equals("night")||str(state,"phase").equals("first_night");}
     private boolean ghostVote(String id){for(JsonElement e:array(state,"seats"))if(e.isJsonObject()&&str(e.getAsJsonObject(),"uuid").equals(id))return bool(e.getAsJsonObject(),"ghostVote");return false;}
     private String currentActorName(){Task current=tasks.stream().filter(Task::current).findFirst().orElse(null);return current==null?"当前玩家":name(current.actor);}
+    private String who(String id){Seat seat=seats.stream().filter(s->s.id.equals(id)).findFirst().orElse(null);String name=name(id);return seat==null?name:seat.number+"号 · "+name;}
+    private String taskLine(Task t){return who(t.actor)+" · "+roleName(t.role)+(t.fakeRole?"（酒鬼假身份技能）":"")+" · "+statusLabel(t.status)+(t.targets.isEmpty()?"":"\n选择 → "+String.join("、",t.targets.stream().map(id->{Seat seat=seats.stream().filter(s->s.id.equals(id)).findFirst().orElse(null);return who(id)+(seat==null||seat.role.isBlank()?"":"（"+roleName(seat.role)+"）");}).toList()));}
+    private String voteSummary(JsonObject vote){return "提名 · "+who(str(vote,"nominee"))+" · 支持 "+number(vote,"supportCount",0)+" / 有效 "+number(vote,"effectiveCount",0)+" / 门槛 "+number(vote,"threshold",0)+" · 已回应 "+number(vote,"counted",0)+" / "+seats.size();}
     private String name(String id){for(Contact c:contacts)if(c.id.equals(id)||c.key.equals(id))return c.name;for(Seat s:seats)if(s.id.equals(id))return s.number+"号";return id.isBlank()?"无":"本桌玩家";}
     private int seatColor(String id){for(Contact c:contacts)if(c.id.equals(id))return c.color;for(Seat s:seats)if(s.id.equals(id))return 0xff000000|ClockSeats.color(s.number);return GOLD;}
     private String namedText(String value){for(Contact c:contacts)if(!c.id.isBlank())value=value.replace(c.id,c.name);return value;}
