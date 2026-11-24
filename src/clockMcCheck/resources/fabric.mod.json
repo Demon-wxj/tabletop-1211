@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "tabletop_clock_share_check",
+  "version": "1.0.0",
+  "name": "Disposable Clocktower Sharing Regression",
+  "environment": "server",
+  "entrypoints": {"main": ["local.tabletop.ClockSharingCheck"]},
+  "mixins": ["clock-share-check.mixins.json"],
+  "depends": {"tabletop": "*", "fabric-api": "*"}
+}

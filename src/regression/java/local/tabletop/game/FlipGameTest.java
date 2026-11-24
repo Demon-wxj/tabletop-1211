@@ -18,6 +18,7 @@ public final class FlipGameTest {
     public static void run() {
         compositionAndValidation();
         scoringAndSeven();
+        configuredScoreAndTiming();
         secondChanceNoReplacement();
         secondChanceRecalculatesScore();
         initialSecondChancePairRemoval();
@@ -111,6 +112,13 @@ public final class FlipGameTest {
         expect(IllegalStateException.class, () -> game.draw(A));
         eq(before, game.publicView().toString(), "cannot score an ended round twice");
         conserved(game);
+    }
+
+    private static void configuredScoreAndTiming(){
+        var game=new FlipGame(PLAYERS,91L,List.of("number_3","number_0","number_1","times_two","plus_10","number_4","number_5","number_6","number_7","number_8","number_9"),new FlipGame.Rules(115,25,true,40));
+        game.draw(A);game.stay(B);game.stay(C);for(int i=0;i<7;i++)game.draw(A);
+        eq(119,number(row(game,A),"total"),"map's custom seven bonus is banked");check(game.finished(),"map's custom goal ends match below 200 points");
+        eq(40,number(game.publicView(),"autoNextDelayTicks"),"saved delay in actual engine");check((Boolean)game.publicView().get("autoNext"),"automatic rounds enabled by map");
     }
 
     private static void secondChanceNoReplacement() {

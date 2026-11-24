@@ -1,5 +1,5 @@
 plugins { id 'fabric-loom' version '1.9-SNAPSHOT'; id 'java' }
-version = '0.5.10+mc1.21.1'
+version = '0.5.14+mc1.21.1'
 group = 'local.tabletop'
 base { archivesName = 'tabletop' }
 repositories {
@@ -50,6 +50,10 @@ if (project.hasProperty('clockMcCheck')) {
         runtimeClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.runtimeClasspath
     } }
     compileClockMcCheckJava.dependsOn classes, clientClasses
+    loom {
+        mods { tabletop_clock_share_check { sourceSet sourceSets.clockMcCheck } }
+        runs { clockShareCheck { server(); source sourceSets.clockMcCheck; runDir 'clock-share-check'; programArg 'nogui' } }
+    }
     tasks.register('clockMcCheckJar', Jar) {
         dependsOn clockMcCheckClasses
         from sourceSets.clockMcCheck.output

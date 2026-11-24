@@ -49,12 +49,18 @@ public final class FixedClockTable {
 
     public static Binding existing(MinecraftServer server){return get(server);}
 
+    /** A shared save keeps its venue, while its new LAN owner or an operator may host it. */
+    public static boolean canCreate(ServerPlayerEntity player,Binding binding){
+        return binding==null||binding.hostUUID.equals(player.getUuid())
+            ||player.getServer().isHost(player.getGameProfile())||player.hasPermissionLevel(2);
+    }
+
     public static Binding forCreation(ServerPlayerEntity p,BlockPos requestedPos){
         Objects.requireNonNull(requestedPos,"缺少开桌位置。");
         if(Sessions.GAMES.values().stream().anyMatch(session->session.type.equals("clock")))throw new IllegalStateException("固定钟楼桌已开启，请使用现有魔典继续。");
         Binding binding=get(p.getServer());
         if(binding==null){checkPosition(p,requestedPos);return null;}
-        if(!binding.hostUUID.equals(p.getUuid()))throw new IllegalStateException("请由本场地的说书人右键固定魔典开桌；其他玩家从手机加入。");
+        if(!canCreate(p,binding))throw new IllegalStateException("钟楼尚未开桌。请原说书人、当前房主或管理员右键固定魔典开桌；其他玩家随后从手机加入。");
         checkDimension(p,binding);
         checkNearby(p,binding);
         checkPosition(p,binding.arenaAnchor);
@@ -75,7 +81,7 @@ public final class FixedClockTable {
         if(binding.grimoirePos!=null){
             if(!binding.grimoirePos.equals(pos))throw new IllegalStateException("请使用本场地已经绑定的固定魔典讲台。");
         }else{
-            if(!binding.hostUUID.equals(p.getUuid()))throw new IllegalStateException("请由本场地的说书人在准备阶段首次绑定魔典讲台。");
+            if(!canCreate(p,binding))throw new IllegalStateException("请原说书人、当前房主或管理员在准备阶段首次绑定魔典讲台。");
             checkNearby(p,binding);
             if(!nearAnchor(binding.arenaAnchor,pos))throw new IllegalStateException("魔典讲台须在固定场地64格内。");
         }
@@ -110,6 +116,10 @@ public final class FixedClockTable {
         root.addProperty("hostUUID",next.hostUUID.toString());
         try{
             Path destination=file(server);Files.createDirectories(destination.getParent());Path temporary=destination.resolveSibling(destination.getFileName()+".tmp");
+            if(previous!=null&&!previous.hostUUID.equals(next.hostUUID)){
+                Path backup=destination.resolveSibling("fixed-clock.before-host-change-"+previous.hostUUID+".json");
+                if(!Files.exists(backup))Files.copy(destination,backup);
+            }
             Files.writeString(temporary,JSON.toJson(root),StandardCharsets.UTF_8);
             try{Files.move(temporary,destination,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
             catch(AtomicMoveNotSupportedException e){Files.move(temporary,destination,StandardCopyOption.REPLACE_EXISTING);}

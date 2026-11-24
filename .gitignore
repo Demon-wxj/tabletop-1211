@@ -24,3 +24,4 @@ saves/
 .env
 .env.*
 secrets.*
+clock-share-check/

@@ -18,6 +18,13 @@ import java.util.UUID;
 public final class FlipGame {
     public static final int WINNING_SCORE = 200;
     public static final int DEFAULT_AUTO_NEXT_DELAY_TICKS = 60;
+    public record Rules(int goal, int bonus, boolean autoNext, int delayTicks) {
+        public static final Rules DEFAULT = new Rules(WINNING_SCORE, 15, false, DEFAULT_AUTO_NEXT_DELAY_TICKS);
+        public Rules {
+            if(goal < 1 || goal > 10000 || bonus < 0 || bonus > 200 || delayTicks < 1 || delayTicks > 1200) throw new IllegalArgumentException("七连翻规则超出范围");
+        }
+    }
+    private final Rules rules;
     /** A confirmed draw, including its immutable public row before any later forced draw. */
     public record Reveal(UUID player, String cardId, String label, long sequence, int round,
                          String outcome, List<String> cards, List<String> tableCards,
@@ -177,9 +184,14 @@ public final class FlipGame {
     private long autoNextAtTick = -1;
 
     public FlipGame(List<UUID> players, long seed) { this(players, seed, List.of()); }
+    public FlipGame(List<UUID> players, long seed, Rules rules) { this(players, seed, List.of(), rules); }
 
     /** Deterministic valid deck prefix, package-private for regression tests. */
     FlipGame(List<UUID> players, long seed, List<String> prefix) {
+        this(players, seed, prefix, Rules.DEFAULT);
+    }
+    FlipGame(List<UUID> players, long seed, List<String> prefix, Rules rules) {
+        this.rules=Objects.requireNonNull(rules);autoNext=rules.autoNext();autoNextDelayTicks=rules.delayTicks();
         if (players == null || players.size() < 3 || players.size() > 18)
             throw new IllegalArgumentException("七连翻单副牌支持3至18名玩家");
         if (players.stream().anyMatch(Objects::isNull) || new HashSet<>(players).size() != players.size())
@@ -351,10 +363,10 @@ public final class FlipGame {
         int best = states.values().stream().mapToInt(player -> player.total).max().orElse(0);
         List<String> leaders = states.values().stream().filter(player -> player.total == best).map(player -> player.id.toString()).toList();
         view.put("leaders", leaders);
-        view.put("tiedAtThreshold", roundOver && !finished && best >= WINNING_SCORE && leaders.size() > 1);
+        view.put("tiedAtThreshold", roundOver && !finished && best >= rules.goal() && leaders.size() > 1);
         view.put("flowTitle", flowTitle());
         view.put("flowInstruction", flowInstruction());
-        view.put("winningScore", WINNING_SCORE);
+        view.put("winningScore", rules.goal());view.put("sevenAward", rules.bonus());
         view.put("deckRemaining", deck.size());
         view.put("discardCount", discard.size());
         view.put("inFlightCount", inFlight.size());
@@ -407,7 +419,7 @@ public final class FlipGame {
         if (roundOver) {
             int best = states.values().stream().mapToInt(player -> player.total).max().orElse(0);
             long leaders = states.values().stream().filter(player -> player.total == best).count();
-            return "第" + round + "轮结算" + (best >= WINNING_SCORE && leaders > 1 ? " · 最高分平分，继续加轮" : "");
+            return "第" + round + "轮结算" + (best >= rules.goal() && leaders > 1 ? " · 最高分平分，继续加轮" : "");
         }
         if (pending != null) return "待办 · " + pending.card.label + "选择目标";
         return initialDealing ? "初次发牌 · 已有牌者选择翻或停" : "第" + round + "轮 · 翻牌或收手";
@@ -416,7 +428,7 @@ public final class FlipGame {
     private String flowInstruction() {
         if (finished) return "本轮分数已计入总分。最终排名保留在桌面，主持人可准备下一局。";
         if (roundOver) return sevenPlayer != null
-                ? "有人集齐七种数字，立即结束全桌本轮；未爆牌者计分，集齐者另加15分。"
+                ? "有人集齐七种数字，立即结束全桌本轮；未爆牌者计分，集齐者另加"+rules.bonus()+"分。"
                 : "本轮已无活跃玩家，所有得分已一次性计入总分；爆牌者本轮0分。";
         if (pending != null) return pendingInstruction();
         return "只有当前行动玩家选择翻牌或收手。没有牌时必须先翻牌；其他玩家等待桌边轮转。";
@@ -455,7 +467,7 @@ public final class FlipGame {
         int numberTotal = player.numbers.stream().mapToInt(Integer::intValue).sum();
         int additions = player.cards.stream().filter(card -> card.kind == Kind.PLUS).mapToInt(Card::value).sum();
         int multiplier = player.cards.stream().anyMatch(card -> card.kind == Kind.DOUBLE) ? 2 : 1;
-        int sevenBonus = player.numbers.size() == 7 ? 15 : 0;
+        int sevenBonus = player.numbers.size() == 7 ? rules.bonus() : 0;
         int result = score(player);
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("numberTotal", numberTotal); details.put("multiplier", multiplier); details.put("modifierTotal", additions);
@@ -621,7 +633,7 @@ public final class FlipGame {
             if (player.total > best) { best = player.total; bestCount = 1; leader = player.id; }
             else if (player.total == best) bestCount++;
         }
-        if (best >= WINNING_SCORE && bestCount == 1) {
+        if (best >= rules.goal() && bestCount == 1) {
             finished = true;
             winner = leader;
         }
@@ -636,7 +648,7 @@ public final class FlipGame {
             if (card.kind == Kind.PLUS) additions += card.value;
             if (card.kind == Kind.DOUBLE) multiplier = 2;
         }
-        return numberTotal * multiplier + additions + (player.numbers.size() == 7 ? 15 : 0);
+        return numberTotal * multiplier + additions + (player.numbers.size() == 7 ? rules.bonus() : 0);
     }
 
     private Card chance(Player player) {

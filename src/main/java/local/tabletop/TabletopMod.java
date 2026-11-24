@@ -36,10 +36,15 @@ public final class TabletopMod implements ModInitializer {
         for(var r:local.tabletop.game.RoleCatalog.all()) ids.add("role_"+r.id());
         for(String key:ids) ITEMS.put(key,Registry.register(Registries.ITEM,id(key),new PropItem(key)));
         TabletopFurniture.register();
+        GameRulesMenu.register();
         FlipControls.register();
         ClockEmbodiment.register();
         // Phone and reading props open directly, including in front of interactive blocks.
         UseBlockCallback.EVENT.register((player,world,hand,hit)->{
+            if(hand==Hand.MAIN_HAND&&!player.isSneaking()&&world.getBlockState(hit.getBlockPos()).isOf(TabletopFurniture.GRIMOIRE_LECTERN)){
+                if(!world.isClient&&player instanceof ServerPlayerEntity p)Sessions.openGrimoireBlock(p,hit.getBlockPos());
+                return ActionResult.SUCCESS;
+            }
             ActionResult control=FlipControls.interact(player,world,hand,hit);if(control!=ActionResult.PASS)return control;
             if(FlipInventory.managed(player.getStackInHand(hand))){if(player instanceof ServerPlayerEntity p)FlipInventory.use(p,hand,null);return ActionResult.SUCCESS;}
             if(player.getStackInHand(hand).getItem() instanceof PropItem prop && (prop.key.equals("phone")||prop.readingBook()||prop.key.equals("script_card")&&!player.isSneaking())) {
