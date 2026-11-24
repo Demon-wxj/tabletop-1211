@@ -116,7 +116,7 @@ public final class Sessions {
             if(type.equals("clock")){var fixed=FixedClockTable.get(p.getServer());if(fixed!=null&&fixed.grimoirePos()!=null){s.grimoirePos=fixed.grimoirePos();placeDisplayAnchor(s,p);}FixedClockTable.save(s,p.getServer());}
             GAMES.put(s.id,s);MEMBERS.put(p.getUuid(),s.id);gameKit(p,s);TabletopPresentation.labels(s,p.getServer());
             if(type.equals("flip"))FlipTableLayout.moveToSeat(s,p,flipSeat(s,p.getUuid()));
-            tell(p,type.equals("clock")?"钟楼已准备 · 你是说书人 · 等待玩家入座":"七连翻已准备 · 等待至少3人入座");
+            tell(p,type.equals("clock")?"钟楼已准备 · 你是说书人 · 等待玩家入座":"七连翻已准备 · 等待至少"+FlipOptions.get(s.server).min()+"人入座");
             if(type.equals("flip")&&!ACTION_FEEDBACK.containsKey(p.getUuid()))open(p,"phone",true);
             return true;
         }catch(RuntimeException e){tell(p,e.getMessage());return false;}
@@ -150,7 +150,7 @@ public final class Sessions {
             else if(op.equals("logpage")){if(!s.host.equals(actor)&&(s.clock==null||!s.clock.canReview(actor)))throw new IllegalStateException("只有说书人，或已获局后复盘授权的本桌玩家可读完整记录。");Map<String,Object> state=s.clock==null?preparationState(s):readingState(s,actor);int pages=((Number)state.getOrDefault("logPages",1)).intValue(),page=((Number)state.getOrDefault("logPage",1)).intValue()-1;String direction=arg(args,1);page=switch(direction){case "previous"->page-1;case "next"->page+1;case "first"->0;case "last"->pages-1;default->Integer.parseInt(direction)-1;};s.reviewPages.put(actor,Math.clamp(page,0,pages-1));open(p,OPEN_KIND.getOrDefault(actor,s.host.equals(actor)?"grimoire":"clock_review"),false);return 1;}
             else if(op.equals("exportlog")){host(s,actor);if(s.clock==null)throw new IllegalStateException("开局后才可以导出完整对局记录。");saveReplay(s,p.getServer());tell(p,"完整对局记录已保存到服务器世界目录："+s.replayFile);refresh(s,p.getServer());return 1;}
             else if(op.equals("role")){host(s,actor);if(!s.type.equals("clock")||s.running)throw new IllegalStateException("只在暗流涌动准备阶段分配角色。");UUID target=member(s,arg(args,1));if(target.equals(s.host))throw new IllegalArgumentException("说书人不参与角色分配。");String[] ids=arg(args,2).split("\\s+");var role=RoleCatalog.get(ids[0]);var shownRole=RoleCatalog.get(ids.length>1?ids[1]:ids[0]);if(role==null||shownRole==null)throw new IllegalArgumentException("角色不属于暗流涌动，请从魔典的选角色按钮选择。");String shown=shownRole.id();if(role.id().equals("drunk")&&!shownRole.type().equals("townsfolk"))throw new IllegalArgumentException("酒鬼需要填写一个镇民假身份：drunk 镇民id。");if(!role.id().equals("drunk")&&!role.id().equals(shown))throw new IllegalArgumentException("只有酒鬼可分配不同的初始假身份。");for(var e:s.assignments.entrySet())if(!e.getKey().equals(target)&&(e.getValue()[0].equals(role.id())||e.getValue()[1].equals(shown)))throw new IllegalArgumentException("真实角色或对玩家展示的身份重复，请检查已分配角色。");s.assignments.put(target,new String[]{role.id(),shown});s.preparedClock=null;respond(p,"已分配 "+s.roster.get(target)+" → "+role.name()+"（对玩家展示 "+shownRole.name()+"）。");refresh(s,p.getServer());return 1;}
-            else if(op.equals("start")){host(s,actor);if(s.running)throw new IllegalStateException("本局已经开始。");requireOnline(s);if(s.type.equals("flip")){requireFlipPlayers(s);s.flip=new FlipGame(flipPlayers(s),System.nanoTime());s.running=true;result="七连翻开始 · 从红色1号顺时针发牌 · 右键摸牌或收手，行动牌右键选人。";}else{requireClockPlayers(s);if(!ClockArena.enabled(s,p.getServer()))throw new IllegalStateException("请先配置并启用钟楼场地。");ClockGame game=preparedGame(s);String layoutIssue=ClockArena.issue(s,p.getServer());if(!layoutIssue.isEmpty())throw new IllegalStateException(layoutIssue);layoutIssue=ClockEmbodiment.lockIssue(s,p.getServer());if(!layoutIssue.isEmpty())throw new IllegalStateException(layoutIssue);result=game.start(s.host);if(!game.started())throw new IllegalStateException(result);s.clock=game;s.preparedClock=null;s.running=true;try{ClockEmbodiment.start(s,p.getServer());}catch(RuntimeException e){ClockEmbodiment.release(s,p.getServer());s.clock=null;s.preparedClock=null;s.running=false;throw e;}}}
+            else if(op.equals("start")){host(s,actor);if(s.running)throw new IllegalStateException("本局已经开始。");requireOnline(s);if(s.type.equals("flip")){requireFlipPlayers(s);s.flip=new FlipGame(flipPlayers(s),System.nanoTime(),FlipOptions.get(s.server).rules());s.running=true;result="七连翻开始 · 从红色1号顺时针发牌 · 右键摸牌或收手，行动牌右键选人。";}else{requireClockPlayers(s);if(!ClockArena.enabled(s,p.getServer()))throw new IllegalStateException("请先配置并启用钟楼场地。");ClockGame game=preparedGame(s);String layoutIssue=ClockArena.issue(s,p.getServer());if(!layoutIssue.isEmpty())throw new IllegalStateException(layoutIssue);layoutIssue=ClockEmbodiment.lockIssue(s,p.getServer());if(!layoutIssue.isEmpty())throw new IllegalStateException(layoutIssue);result=game.start(s.host);if(!game.started())throw new IllegalStateException(result);s.clock=game;s.preparedClock=null;s.running=true;try{ClockEmbodiment.start(s,p.getServer());}catch(RuntimeException e){ClockEmbodiment.release(s,p.getServer());s.clock=null;s.preparedClock=null;s.running=false;throw e;}}}
             else if(op.equals("draw")){requireOnline(s);result=flip(s).draw(actor);}
             else if(op.equals("stay")){requireOnline(s);result=flip(s).stay(actor);}
             else if(op.equals("target")){requireOnline(s);result=flip(s).target(actor,member(s,arg(args,1)));}
@@ -193,7 +193,7 @@ public final class Sessions {
         flipPlayers(s);
         Map<String,Object> state=new LinkedHashMap<>();
         if(s.flip!=null)state.putAll(s.flip.publicView());
-        else{state.put("phase","setup");state.put("started",false);state.put("finished",false);state.put("readyToStart",flipReady(s));state.put("minimumPlayers",3);state.put("maximumPlayers",FlipSeats.LIMIT);state.put("playerCount",s.roster.size());state.put("startIssue",flipStartIssue(s));}
+        else{state.put("phase","setup");state.put("started",false);state.put("finished",false);state.put("readyToStart",flipReady(s));var opt=FlipOptions.get(s.server);state.put("minimumPlayers",opt.min());state.put("maximumPlayers",opt.max());state.put("winningScore",opt.goal());state.put("sevenAward",opt.bonus());state.put("playerCount",s.roster.size());state.put("startIssue",flipStartIssue(s));}
         state.put("game","flip7");state.put("tablePaused",!s.offline.isEmpty());
         var rows=new LinkedHashMap<String,Object>();Map<?,?> raw=state.get("players") instanceof Map<?,?> value?value:Map.of();
         for(UUID id:flipPlayers(s)){
@@ -206,7 +206,7 @@ public final class Sessions {
         return state;
     }
     private static String flipStartIssue(Session s){
-        if(s.roster.size()<3||s.roster.size()>FlipSeats.LIMIT)return "七连翻需要3–8名玩家，主持人也参加。";
+        var opt=FlipOptions.get(s.server);if(s.roster.size()<opt.min()||s.roster.size()>opt.max())return "七连翻需要"+opt.min()+"–"+opt.max()+"名玩家，主持人也参加。";
         flipPlayers(s);if(!s.flipSeats.snapshot().containsValue(1))return "红色1号需要有人入座，第一轮从1号开始。";
         return s.offline.isEmpty()?"":"本桌有人离线，等待重连后继续。";
     }
@@ -297,7 +297,7 @@ public final class Sessions {
         if(MEMBERS.containsKey(p.getUuid()))throw new IllegalStateException("你已经入桌，请先离桌。");
         Session s=GAMES.get(id);if(s==null)throw new IllegalArgumentException("桌号不存在。");
         if(s.running)throw new IllegalStateException("本局已经开始，等待下一局。");
-        int maximum=s.type.equals("flip")?FlipSeats.LIMIT:CLOCK_PLAYERS;
+        int maximum=s.type.equals("flip")?FlipOptions.get(s.server).max():CLOCK_PLAYERS;
         if(s.roster.size()>=maximum)throw new IllegalStateException(s.type.equals("flip")?"七连翻本桌最多8名玩家，主持人也参加。":"本桌已有12名玩家，另设1名说书人。");
         if(!p.getWorld().getRegistryKey().equals(s.dimension)||p.squaredDistanceTo(s.anchor.getX()+.5,s.anchor.getY(),s.anchor.getZ()+.5)>64*64)throw new IllegalStateException("请到固定场地64格内加入。");
         if(s.type.equals("flip")){flipPlayers(s);if(preferredSeat<0||preferredSeat>FlipSeats.LIMIT)throw new IllegalArgumentException("七连翻请选择1–8号。");if(preferredSeat>0&&s.flipSeats.snapshot().containsValue(preferredSeat))throw new IllegalStateException(preferredSeat+"号已有人选择，请选空号。");}
@@ -341,11 +341,12 @@ public final class Sessions {
         String clean=text.replaceAll("[\\p{Cntrl}§]","");if(clean.isBlank())throw new IllegalArgumentException("消息内容不能为空。");s.messages.addLast(new Message(Set.copyOf(recipients),channel,from,recipient,name(s,from),clean,++s.messageSequence));while(s.messages.size()>400)s.messages.removeFirst();
     }
     private static String name(Session s,UUID id){return id.equals(s.host)&&!s.roster.containsKey(id)?"说书人":s.roster.getOrDefault(id,"玩家");}
-    private static String status(Session s){return "桌号 "+s.id+" · "+(s.type.equals("flip")?"七连翻":"暗流涌动")+" · "+(s.type.equals("clock")?clockGatheringLabel(s):s.roster.size()+" / 8人")+" · "+(!s.running?"准备中":s.ended()?"已结算":"对局中")+(s.offline.isEmpty()?"":" · 等待重连");}
+    private static String status(Session s){return "桌号 "+s.id+" · "+(s.type.equals("flip")?"七连翻":"暗流涌动")+" · "+(s.type.equals("clock")?clockGatheringLabel(s):s.roster.size()+" / "+FlipOptions.get(s.server).max()+"人")+" · "+(!s.running?"准备中":s.ended()?"已结算":"对局中")+(s.offline.isEmpty()?"":" · 等待重连");}
     public static void action(ServerPlayerEntity p,TabletopNet.Action packet){
         String a=packet.action(),target=packet.target(),text=packet.text();
         int tick=p.getServer().getTicks();int[] rate=THROTTLES.computeIfAbsent(p.getUuid(),id->new int[]{tick,0});if(tick-rate[0]>=20){rate[0]=tick;rate[1]=0;}
         if(++rate[1]>8){if(!a.equals("open")&&!a.equals("refresh")){String message="操作过快，请稍候再试；本次请求未执行。";tell(p,message);feedback(p,new ActionFeedback(a,MEMBERS.getOrDefault(p.getUuid(),"")),false,message);}return;}
+        if(a.equals("rules_save")){GameRulesMenu.apply(p,target,text);return;}
         if(a.equals("open")){open(p,target,true);return;}
         if(a.equals("refresh")){open(p,OPEN_KIND.getOrDefault(p.getUuid(),"phone"),false);return;}
         ActionFeedback pending=new ActionFeedback(a,MEMBERS.getOrDefault(p.getUuid(),""));ACTION_FEEDBACK.put(p.getUuid(),pending);
@@ -410,7 +411,7 @@ public final class Sessions {
         if(!TabletopMod.hasPhone(p))kit(p);open(p,"phone",true);
     }
     private static void placeDisplayAnchor(Session s,ServerPlayerEntity p){if(s.grimoirePos==null)return;var block=p.getWorld().getBlockState(s.grimoirePos);Direction facing=block.contains(Properties.HORIZONTAL_FACING)?block.get(Properties.HORIZONTAL_FACING):Direction.SOUTH;s.anchor=s.grimoirePos.offset(facing,3).up();}
-    /** The world owns one fixed table and lectern; only its storyteller can start a session. */
+    /** The fixed venue survives sharing; a new LAN owner or operator may host an unopened table. */
     public static void openGrimoireBlock(ServerPlayerEntity p,BlockPos pos) {
         if(p.squaredDistanceTo(pos.getX()+.5,pos.getY()+.5,pos.getZ()+.5)>36)return;
         try{
@@ -488,11 +489,11 @@ public final class Sessions {
             if(kind.equals("phone")){
                 if(s==null){
                     body.add("创建游戏，或加入附近牌桌。");
-                    button(buttons,"创建七连翻 · 3–8人","create","flip","");
-                    var fixed=FixedClockTable.get(p.getServer());
-                    if(GAMES.values().stream().noneMatch(table->table.type.equals("clock"))&&(fixed==null||fixed.hostUUID().equals(p.getUuid())))button(buttons,fixed==null?"准备钟楼桌":"打开固定钟楼桌","create","clock","");
+                    var flipSettings=FlipOptions.get(p.getServer());button(buttons,"创建七连翻 · "+flipSettings.min()+"–"+flipSettings.max()+"人","create","flip","");
+                    Map<String,String> clockEntry=clockLobbyButton(p);
+                    if(clockEntry!=null)buttons.add(clockEntry);
                     int nearbyCount=0;
-                    for(Session nearby:GAMES.values())if(!nearby.running&&nearby.dimension.equals(p.getWorld().getRegistryKey())&&nearby.roster.size()<(nearby.type.equals("flip")?FlipSeats.LIMIT:CLOCK_PLAYERS)&&p.squaredDistanceTo(nearby.anchor.getX()+.5,nearby.anchor.getY(),nearby.anchor.getZ()+.5)<=64*64){button(buttons,"加入 "+nearby.hostName+" · "+(nearby.type.equals("flip")?"七连翻":"暗流涌动")+"（"+nearby.roster.size()+"人）","join",nearby.id,"");nearbyCount++;}
+                    for(Session nearby:GAMES.values())if(!nearby.running&&nearby.dimension.equals(p.getWorld().getRegistryKey())&&nearby.roster.size()<(nearby.type.equals("flip")?flipSettings.max():CLOCK_PLAYERS)&&p.squaredDistanceTo(nearby.anchor.getX()+.5,nearby.anchor.getY(),nearby.anchor.getZ()+.5)<=64*64){button(buttons,"加入 "+nearby.hostName+" · "+(nearby.type.equals("flip")?"七连翻":"血染钟楼")+"（"+nearby.roster.size()+"人）","join",nearby.id,"");nearbyCount++;}
                     if(nearbyCount==0)body.add("附近没有等待中的游戏。");
                 }else{
                     if(s.type.equals("flip")){Map<String,Object> flipState=phoneFlipState(s,p.getUuid());view.put("state",flipState);boolean canChoose=Boolean.TRUE.equals(flipState.get("canChooseSeat"));view.put("openSeats",opening&&canChoose&&s.seatSelectionRequests.remove(p.getUuid()));if(canChoose)button(buttons,"选择号码与颜色","choose_seat","$seat","");}
@@ -502,7 +503,7 @@ public final class Sessions {
                     var visible=s.messages.stream().filter(m->m.recipients.contains(p.getUuid())).toList();var chats=new ArrayList<Map<String,Object>>();int start=Math.max(0,visible.size()-18);for(int i=start;i<visible.size();i++){var m=visible.get(i);String key=m.channelKey;if(!key.equals("public")&&!s.groups.containsKey(key)){UUID peer=m.author.equals(p.getUuid())?m.recipients.stream().filter(id->!id.equals(p.getUuid())).findFirst().orElse(p.getUuid()):m.author;key=peer.equals(s.host)?"storyteller":peer.toString();}chats.add(Map.of("key",key,"sender",m.sender,"text",m.text,"outgoing",m.author.equals(p.getUuid()),"sequence",m.sequence));}view.put("chats",chats);
                     if(s.clock!=null){Map<String,Object> own=readingState(s,p.getUuid());body.add("阶段："+human(own.get("phase"),s));if(own.get("vote") instanceof Map<?,?> voting){body.add("投票目标："+human(voting.get("nominee"),s)+" · 所有座位同时投票 · 已回应 "+human(voting.get("counted"),s));}Object publicMessages=own.get("announcements");if(publicMessages instanceof Collection<?> list)for(Object message:list.stream().skip(Math.max(0,list.size()-4)).toList())body.add("[公共公告] "+message);Object spy=own.get("spyGrimoire");if(spy!=null)body.add("[本夜获准查看的魔典] "+human(spy,s));Object pending=own.get("pendingTask");if(pending!=null)body.add("当前行动："+(pending instanceof Map<?,?> task?human(task.get("status"),s):"等待确认"));}
                     if(s.flip!=null){Map<String,Object> state=s.flip.publicView();body.add("当前行动玩家："+human(state.get("turn"),s));body.add("自动下一轮："+(s.flip.autoNext()?"开启，轮末展示后推进":"关闭，由主持人推进"));if(state.get("autoNextInTicks") instanceof Number remaining)body.add("结果展示剩余约 "+Math.max(1,(remaining.longValue()+19)/20)+" 秒。");if(state.get("pendingOwner")!=null)body.add("待选目标："+human(state.get("pendingKind"),s)+" · "+human(state.get("pendingOwner"),s));Map<?,?> own=state.get("players") instanceof Map<?,?> rows&&rows.get(p.getUuid().toString()) instanceof Map<?,?> row?row:Map.of();if(Boolean.TRUE.equals(own.get("canDraw")))button(buttons,"翻牌","draw","","");if(Boolean.TRUE.equals(own.get("canStay")))button(buttons,"收手","stay","","");if(Boolean.TRUE.equals(own.get("canSelectTarget")))button(buttons,"牌的目标","target","$target","");if(s.host.equals(p.getUuid())&&s.flip.roundOver()&&!s.flip.finished())button(buttons,"开始下一轮","next","","");if(s.host.equals(p.getUuid())&&s.flip.finished())button(buttons,"准备下一局","reset","","");button(buttons,"七连翻规则书","open","flip_rules_book","");}
-                    if(s.flip==null&&s.type.equals("flip")){body.add("准备阶段："+s.roster.size()+" / 8 人；至少3人同时在线、红色1号有人才能开始。主持人也参与七连翻。");String issue=flipStartIssue(s);if(!issue.isEmpty())body.add(issue);button(buttons,"七连翻规则书","open","flip_rules_book","");if(s.host.equals(p.getUuid()))stateButton(buttons,"开始七连翻","start","","",flipReady(s),issue);}
+                    if(s.flip==null&&s.type.equals("flip")){body.add("准备阶段："+s.roster.size()+" / "+FlipOptions.get(s.server).max()+" 人；至少"+FlipOptions.get(s.server).min()+"人同时在线、红色1号有人才能开始。主持人也参与七连翻。");String issue=flipStartIssue(s);if(!issue.isEmpty())body.add(issue);button(buttons,"七连翻规则书","open","flip_rules_book","");if(s.host.equals(p.getUuid()))stateButton(buttons,"开始七连翻","start","","",flipReady(s),issue);}
                     if(s.clock==null&&s.type.equals("clock")){body.add(clockGatheringLabel(s));button(buttons,"角色技能","open","script_card","");}
                     if(s.clock!=null){Map<String,Object> own=readingState(s,p.getUuid());if(own.get("pendingTask") instanceof Map<?,?> pending&&pending.get("targetCount") instanceof Number count&&count.intValue()>0&&"awaiting_player".equals(pending.get("status")))button(buttons,"提交夜间选择","submit","$target","");if(Boolean.TRUE.equals(own.get("canNominate")))button(buttons,"提名","nominate","$target","");if(own.get("vote") instanceof Map<?,?> voting&&s.roster.containsKey(p.getUuid())){boolean mayVote=Boolean.TRUE.equals(voting.get("mayVote")),maySupport=Boolean.TRUE.equals(voting.get("maySupport"));String waiting=!s.offline.isEmpty()?"本桌有人离线，等待重连后继续。":"当前无法投票，请等待本桌恢复联机。";stateButton(buttons,"举手赞成","vote","yes","",mayVote&&maySupport,!mayVote?waiting:!maySupport?"你的最后一张幽灵票已使用，只能不支持。":"");stateButton(buttons,"不支持","vote","no","",mayVote,mayVote?"":waiting);if(Boolean.TRUE.equals(voting.get("myVote")))stateButton(buttons,"取消赞成","unvote","","",mayVote,mayVote?"":waiting);}if(Boolean.TRUE.equals(own.get("canClaimSlayer")))button(buttons,"宣称猎手","slay","$target","");if(s.clock.finished()&&s.clock.canReview(p.getUuid()))button(buttons,"查看完整复盘","open","clock_review","");}
                     button(buttons,"建私密小组","group","$target","");button(buttons,"查看身份卡","open","identity_card","");if(s.type.equals("clock")&&s.host.equals(p.getUuid()))button(buttons,"说书人魔典助手","open","grimoire","");
@@ -588,6 +589,26 @@ public final class Sessions {
         ReferenceLibrary.Document document=ReferenceLibrary.get(kind);List<String> overview=new ArrayList<>();
         for(var section:document.sections())overview.add(section.title()+" · "+section.category()+(section.alignment().isBlank()?"":" · "+(section.alignment().equals("good")?"善良":"邪恶"))+" — "+section.summary());
         PUBLIC_GRIMOIRE_VIEWERS.remove(p.getUuid());OPEN_KIND.put(p.getUuid(),kind);send(p,Map.of("kind",kind,"title",document.title(),"body",overview,"buttons",List.of(),"reference",document),opening);
+    }
+    /** Keep a visible explanation when there is no joinable Clocktower table yet. */
+    static Map<String,String> clockLobbyButton(ServerPlayerEntity p){
+        Session table=GAMES.values().stream().filter(s->s.type.equals("clock")&&s.server==p.getServer()).findFirst().orElse(null);
+        String label,reason="";boolean enabled=false;
+        if(table!=null){
+            boolean nearby=table.dimension.equals(p.getWorld().getRegistryKey())&&p.squaredDistanceTo(table.anchor.getX()+.5,table.anchor.getY(),table.anchor.getZ()+.5)<=64d*64d;
+            if(!table.running&&nearby&&table.roster.size()<CLOCK_PLAYERS)return null; // The normal join button follows.
+            label=table.running?"血染钟楼 · 本局已开场":!nearby?"血染钟楼 · 请前往固定场地":"血染钟楼 · 席位已满";
+            reason=table.running?"请等待说书人结束本局并重新开桌。":!nearby?"请到固定钟楼场地64格内，再打开手机加入。":"请联系说书人安排席位。";
+        }else{
+            var fixed=FixedClockTable.get(p.getServer());
+            enabled=FixedClockTable.canCreate(p,fixed);
+            label=fixed==null?"创建血染钟楼":enabled?(fixed.hostUUID().equals(p.getUuid())?"打开血染钟楼 · 固定场地":"接管并打开血染钟楼"):"血染钟楼 · 等待说书人开桌";
+            if(!enabled)reason="请原说书人、当前房主或管理员右键固定魔典开桌，随后在手机加入。";
+            else if(fixed!=null&&(!fixed.dimension().equals(p.getWorld().getRegistryKey().getValue().toString())||p.squaredDistanceTo(fixed.arenaAnchor().getX()+.5,fixed.arenaAnchor().getY()+.5,fixed.arenaAnchor().getZ()+.5)>64d*64d)){
+                enabled=false;label="血染钟楼 · 请前往固定场地";reason="请到原钟楼场地64格内，再右键固定魔典或从手机开桌。";
+            }
+        }
+        return Map.of("label",label,"action","create","target","clock","text","","enabled",String.valueOf(enabled),"reason",reason);
     }
     private static String title(String kind){if(ReferenceLibrary.supports(kind))return ReferenceLibrary.get(kind).title();return switch(kind){case "phone"->"桌间手机";case "grimoire"->"暗流涌动 · 魔典助手";case "identity_card"->"你的身份卡";default->"桌游道具";};}
     private static void button(List<Map<String,String>> buttons,String label,String action,String target,String text){buttons.add(Map.of("label",label,"action",action,"target",target,"text",text));}

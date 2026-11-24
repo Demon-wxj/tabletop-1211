@@ -951,9 +951,9 @@ public final class PhoneScreen extends Screen {
     private int maxCardScroll(){int rows=(publicCards().size()+cardColumns()-1)/cardColumns();return Math.max(0,rows*25-Math.max(1,listBottom-listTop));}
     private void cycleCard(int direction){detailReveal=false;int count=publicCards().size();if(count>0)cardSelection=Math.floorMod(cardSelection+direction,count);}
     private String cardDescription(String id){
-        if(id.startsWith("number_"))return id.equals("number_0")?"0不加分，也算一种数字。":"数字牌。拿到相同数字会爆牌；七种不同数字奖励15分。";
+        if(id.startsWith("number_"))return id.equals("number_0")?"0不加分，也算一种数字。":"数字牌。拿到相同数字会爆牌；七种不同数字获得本局设置的奖励。";
         if(id.startsWith("plus_"))return "数字计分后额外加"+id.substring(5)+"分，不被×2翻倍。";
-        return switch(id){case "times_two"->"只将数字之和翻倍；不翻倍加分牌和15分奖励。";case "freeze"->"指定活跃玩家冻结，他保留分数并退出本轮。";case "flip_three"->"指定活跃玩家逐张翻三张；爆牌或七种数字提前停止。";case "second_chance"->"挡一次数字重复。用后弃掉保护与重复牌，不补抽。";default->"公开的桌前牌。";};
+        return switch(id){case "times_two"->"只将数字之和翻倍；不翻倍加分牌和七种奖励。";case "freeze"->"指定活跃玩家冻结，他保留分数并退出本轮。";case "flip_three"->"指定活跃玩家逐张翻三张；爆牌或七种数字提前停止。";case "second_chance"->"挡一次数字重复。用后弃掉保护与重复牌，不补抽。";default->"公开的桌前牌。";};
     }
     private void renderCards(DrawContext c,int mx,int my,float delta){
         if(!publicFlipCards()){c.drawText(textRenderer,Text.literal("当前没有七连翻公开牌"),innerLeft,contentTop+16,MUTED,false);return;}

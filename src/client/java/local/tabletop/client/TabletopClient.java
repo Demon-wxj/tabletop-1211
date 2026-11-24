@@ -32,6 +32,11 @@ public final class TabletopClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(TabletopNet.View.ID,(payload,context)->context.client().execute(()->{
             try{
                 JsonObject data=JsonParser.parseString(payload.json()).getAsJsonObject();
+                if(str(data,"kind").equals("game_settings")){
+                    if(context.client().currentScreen instanceof GameRulesScreen settings && settings.sameGame(data))settings.receive(data);
+                    else if(payload.open())context.client().setScreen(new GameRulesScreen(data));
+                    return;
+                }
                 if(str(data,"kind").equals("night_vision")){NightCurtain.accept(data);return;}
                 if(str(data,"kind").equals("flip_targets_done")){if(context.client().currentScreen instanceof FlipTargetScreen)context.client().setScreen(null);return;}
                 if(str(data,"kind").equals("grimoire_locked")){
